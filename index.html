@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Red Storm — Real-Time Strategy</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
+</head>
+<body>
+    <!-- Main Menu -->
+    <div id="main-menu" class="screen active">
+        <div class="menu-bg"></div>
+        <div class="menu-content">
+            <h1 class="game-title">
+                <span class="title-red">RED</span> <span class="title-storm">STORM</span>
+            </h1>
+            <p class="game-subtitle">REAL-TIME STRATEGY</p>
+            <div class="menu-buttons">
+                <button id="btn-new-game" class="menu-btn primary">CAMPAIGN</button>
+                <button id="btn-select-level" class="menu-btn">SELECT MISSION</button>
+                <button id="btn-how-to-play" class="menu-btn">HOW TO PLAY</button>
+            </div>
+            <div class="menu-footer">
+                <p>A browser-based RTS inspired by Command & Conquer</p>
+                <p class="version">v1.0 — 20 Missions</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Level Select -->
+    <div id="level-select" class="screen">
+        <div class="screen-header">
+            <button id="btn-back-menu" class="back-btn">← Back</button>
+            <h2>SELECT MISSION</h2>
+        </div>
+        <div id="level-grid" class="level-grid"></div>
+    </div>
+
+    <!-- How to Play -->
+    <div id="how-to-play" class="screen">
+        <div class="screen-header">
+            <button id="btn-back-menu2" class="back-btn">← Back</button>
+            <h2>HOW TO PLAY</h2>
+        </div>
+        <div class="help-content">
+            <div class="help-section">
+                <h3>🎮 Controls</h3>
+                <ul>
+                    <li><kbd>Left Click</kbd> — Select unit/building</li>
+                    <li><kbd>Left Drag</kbd> — Box select multiple units</li>
+                    <li><kbd>Right Click</kbd> — Move/Attack command</li>
+                    <li><kbd>WASD</kbd> or <kbd>Arrow Keys</kbd> — Scroll map</li>
+                    <li><kbd>Ctrl+1-9</kbd> — Assign unit group</li>
+                    <li><kbd>1-9</kbd> — Recall unit group</li>
+                    <li><kbd>Delete</kbd> — Sell selected building</li>
+                    <li><kbd>Space</kbd> — Center on selected unit</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>🏗️ Base Building</h3>
+                <ul>
+                    <li>Select <strong>Construction Yard</strong> to build structures</li>
+                    <li>Build <strong>Power Plants</strong> first — everything needs power</li>
+                    <li><strong>Ore Refinery</strong> gives you a Harvester to collect credits</li>
+                    <li><strong>Barracks</strong> train infantry units</li>
+                    <li><strong>War Factory</strong> builds vehicles</li>
+                    <li><strong>Turrets</strong> and <strong>Pillboxes</strong> provide base defense</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>⚔️ Combat</h3>
+                <ul>
+                    <li>Right-click enemy units/buildings to attack</li>
+                    <li>Units auto-attack enemies in range</li>
+                    <li>Use combined arms: infantry + tanks for best results</li>
+                    <li>Artillery has long range but is weak up close</li>
+                    <li>Destroy the enemy Construction Yard to cripple their base</li>
+                </ul>
+            </div>
+            <div class="help-section">
+                <h3>💰 Economy</h3>
+                <ul>
+                    <li>Harvesters automatically seek and return ore</li>
+                    <li>Build more Harvesters for faster income</li>
+                    <li>Sell buildings for 50% refund</li>
+                    <li>Manage power — low power slows production</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pre-Mission Briefing -->
+    <div id="mission-briefing" class="screen">
+        <div class="briefing-content">
+            <h2 id="briefing-title">Mission 1</h2>
+            <div id="briefing-faction" class="briefing-faction"></div>
+            <div id="briefing-text" class="briefing-text"></div>
+            <div id="briefing-objectives" class="briefing-objectives"></div>
+            <button id="btn-start-mission" class="menu-btn primary large">START MISSION</button>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen">
+        <canvas id="game-canvas"></canvas>
+
+        <!-- Top HUD -->
+        <div id="top-hud">
+            <div class="hud-left">
+                <div class="resource-display">
+                    <span class="resource-icon">💎</span>
+                    <span id="credits-display" class="credits">5000</span>
+                </div>
+                <div class="power-display">
+                    <span class="power-icon">⚡</span>
+                    <span id="power-display" class="power">100%</span>
+                </div>
+            </div>
+            <div class="hud-center">
+                <span id="mission-name-hud" class="mission-label">Mission 1</span>
+            </div>
+            <div class="hud-right">
+                <div class="time-display">
+                    <span id="game-time">00:00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div id="sidebar">
+            <div id="selection-panel">
+                <div id="entity-info">
+                    <div class="info-placeholder">Select a unit or building</div>
+                </div>
+            </div>
+            <div id="build-panel">
+                <div id="build-tabs">
+                    <button class="build-tab active" data-tab="structures">🏗️</button>
+                    <button class="build-tab" data-tab="units">🎖️</button>
+                </div>
+                <div id="build-contents"></div>
+            </div>
+            <div id="minimap-container">
+                <canvas id="minimap-canvas" width="200" height="150"></canvas>
+            </div>
+        </div>
+
+        <!-- Messages overlay -->
+        <div id="messages-overlay"></div>
+
+        <!-- Game Over overlay -->
+        <div id="game-over" class="overlay hidden">
+            <div class="overlay-content">
+                <h2 id="game-over-title"></h2>
+                <p id="game-over-text"></p>
+                <div class="overlay-buttons">
+                    <button id="btn-retry" class="menu-btn">Retry Mission</button>
+                    <button id="btn-next-mission" class="menu-btn primary">Next Mission</button>
+                    <button id="btn-to-menu" class="menu-btn">Main Menu</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pause overlay -->
+        <div id="pause-overlay" class="overlay hidden">
+            <div class="overlay-content">
+                <h2>PAUSED</h2>
+                <div class="overlay-buttons">
+                    <button id="btn-resume" class="menu-btn primary">Resume</button>
+                    <button id="btn-quit-game" class="menu-btn">Quit to Menu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading screen -->
+    <div id="loading" class="screen">
+        <div class="loading-content">
+            <h2>LOADING...</h2>
+            <div class="loading-bar"><div class="loading-fill" id="loading-fill"></div></div>
+            <p id="loading-text">Initializing game engine...</p>
+        </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
