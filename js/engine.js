@@ -11,8 +11,8 @@ let entityIdCounter = 0;
 export class Entity {
     constructor(config) {
         this.id = entityIdCounter++;
-        this.type = config.type;          // 'infantry', 'heavy_tank', 'construction_yard', etc.
-        this.category = config.category;  // 'unit' or 'building'
+        this.type = config.type;
+        this.category = config.category;
         this.team = config.team;
         this.tileX = config.tileX;
         this.tileY = config.tileY;
@@ -20,34 +20,45 @@ export class Entity {
         this.y = config.tileY * TILE_SIZE + TILE_SIZE / 2;
 
         const def = this.category === 'building' ? BUILDINGS[config.type] : UNITS[config.type];
-        this.name = def.name;
-        this.icon = def.icon;
-        this.maxHp = def.hp;
-        this.hp = def.hp;
-        this.cost = def.cost;
+        if (!def) {
+            console.error('Missing def for', config.type, config.category);
+        }
+        this.name = def ? def.name : config.type;
+        this.icon = def ? def.icon : '?';
+        this.maxHp = def ? def.hp : 100;
+        this.hp = this.maxHp;
+        this.cost = def ? def.cost : 0;
 
-        this.attackDamage = def.attackDamage || 0;
-        this.attackRange = (def.attackRange || 0) * TILE_SIZE;
-        this.attackSpeed = def.attackSpeed || 0;
-        this.armor = def.armor || 0;
-        this.antiAir = def.antiAir || false;
-        this.antiArmor = def.antiArmor || false;
-        this.splash = (def.splash || 0) * TILE_SIZE;
+        this.attackDamage = (def && def.attackDamage) || 0;
+        this.attackRange = ((def && def.attackRange) || 0) * TILE_SIZE;
+        this.attackSpeed = (def && def.attackSpeed) || 0;
+        this.armor = (def && def.armor) || 0;
+        this.antiAir = (def && def.antiAir) || false;
+        this.antiArmor = (def && def.antiArmor) || false;
+        this.splash = ((def && def.splash) || 0) * TILE_SIZE;
 
-        this.speed = (def.speed || 0) * 1.5;  // pixels per tick
-        this.size = def.size || 1;
-        this.isAir = def.isAir || false;
-        this.isHarvester = def.isHarvester || false;
-        this.canAttack = def.canAttack || false;
-        this.canCapture = def.canCapture || false;
-        this.canTransport = def.canTransport || false;
-        this.isInvisible = def.isInvisible || false;
-        this.producedAt = def.producedAt || null;
-        this.prerequisite = def.prerequisite || null;
+        this.speed = ((def && def.speed) || 0) * 1.5;
+        this.size = (def && def.size) || 1;
+        this.isAir = (def && def.isAir) || false;
+        this.isHarvester = (def && def.isHarvester) || false;
+        this.canAttack = (def && def.canAttack) || false;
+        this.canCapture = (def && def.canCapture) || false;
+        this.canTransport = (def && def.canTransport) || false;
+        this.isInvisible = (def && def.isInvisible) || false;
+        this.producedAt = (def && def.producedAt) || null;
+        this.prerequisite = (def && def.prerequisite) || null;
 
         // Building specific
+        this.sizeW = 1;
+        this.sizeH = 1;
+        this.powerProvided = 0;
+        this.powerUsed = 0;
+        this.provides = null;
+        this.buildTime = 0;
+        this.spawnsUnit = null;
+
         const bDef = BUILDINGS[config.type];
-        if (bDef) {
+        if (bDef && this.category === 'building') {
             this.sizeW = bDef.size.w;
             this.sizeH = bDef.size.h;
             this.powerProvided = bDef.power > 0 ? bDef.power : 0;
@@ -56,19 +67,10 @@ export class Entity {
             this.buildTime = bDef.buildTime;
             this.spawnsUnit = bDef.spawnsUnit || null;
         }
-        if (this.category === 'unit') {
-            this.sizeW = 1;
-            this.sizeH = 1;
-            this.powerProvided = 0;
-            this.powerUsed = 0;
-            this.provides = null;
-            this.sizeW = 1;
-            this.sizeH = 1;
-        }
 
-        // Ore harvester specific
+        // Ore harvester
         this.ore = 0;
-        this.oreCapacity = def.oreCapacity || 0;
+        this.oreCapacity = (def && def.oreCapacity) || 0;
         this.harvesting = false;
         this.harvestTarget = null;
         this.returning = false;
@@ -85,8 +87,8 @@ export class Entity {
         this.attackCooldownMax = this.attackSpeed > 0 ? (1 / this.attackSpeed) * 60 : 0;
 
         // Building construction
-        this.buildProgress = 0;
-        this.underConstruction = config.underConstruction || false;
+        this.buildProgress = 100;
+        this.underConstruction = false;
         this.beingBuilt = config.beingBuilt || false;
         if (this.beingBuilt) {
             this.hp = 1;
@@ -101,7 +103,6 @@ export class Entity {
         // Visual
         this.selected = false;
         this.visible = true;
-        this.fogRevealed = false;
 
         // Death
         this.dead = false;
@@ -109,13 +110,9 @@ export class Entity {
 
         // Animation
         this.animFrame = 0;
-        this.facing = 0; // radians
+        this.facing = 0;
     }
 
-    get pixelX() { return this.x; }
-    get pixelY() { return this.y; }
-    get centerX() { return this.x; }
-    get centerY() { return this.y; }
     get hpPercent() { return this.maxHp > 0 ? this.hp / this.maxHp : 0; }
     get isUnit() { return this.category === 'unit'; }
     get isBuilding() { return this.category === 'building'; }
@@ -135,9 +132,6 @@ class Projectile {
         this.owner = config.owner;
         this.team = config.team;
         this.dead = false;
-        this.dx = 0;
-        this.dy = 0;
-
         const a = angle(this.x, this.y, this.targetX, this.targetY);
         this.dx = Math.cos(a) * this.speed;
         this.dy = Math.sin(a) * this.speed;
@@ -153,7 +147,7 @@ export class Game {
         this.minimapCtx = null;
         this.audio = new AudioSystem();
 
-        this.state = 'menu'; // menu, briefing, playing, paused, gameover
+        this.state = 'menu';
         this.currentLevel = null;
         this.currentLevelIndex = 0;
 
@@ -162,7 +156,7 @@ export class Game {
         this.mapH = 0;
         this.entities = [];
         this.projectiles = [];
-        this.explosions = []; // {x, y, radius, timer}
+        this.explosions = [];
 
         this.playerCredits = 0;
         this.enemyCredits = 0;
@@ -174,10 +168,9 @@ export class Game {
         this.selectedEntities = [];
         this.camera = { x: 0, y: 0 };
         this.targetCamera = { x: 0, y: 0 };
-        this.cameraSpeed = 15;
 
         this.gameTime = 0;
-        this.tickRate = 60;
+        this.tickCount = 0;
         this.lastTime = 0;
         this.dt = 0;
         this.running = false;
@@ -193,7 +186,7 @@ export class Game {
         this.messages = [];
         this.levelProgress = this.loadProgress();
 
-        // AI state
+        // AI
         this.ai = null;
         this.aiTimer = 0;
         this.aiWaveTimer = 0;
@@ -201,14 +194,10 @@ export class Game {
         // Victory/defeat
         this.victory = false;
         this.defeat = false;
-
-        // Callbacks
-        this.onVictory = null;
-        this.onDefeat = null;
-        this.onUpdateUI = null;
+        this.warmupFrames = 0; // Don't check victory for first few frames
 
         // Fog of war
-        this.fogMap = []; // 2D array: 0=unexplored, 1=explored, 2=visible
+        this.fogMap = [];
     }
 
     loadProgress() {
@@ -219,9 +208,7 @@ export class Game {
     }
 
     saveProgress() {
-        try {
-            localStorage.setItem('redstorm_progress', JSON.stringify(this.levelProgress));
-        } catch {}
+        try { localStorage.setItem('redstorm_progress', JSON.stringify(this.levelProgress)); } catch {}
     }
 
     init(canvas, minimapCanvas) {
@@ -239,14 +226,16 @@ export class Game {
         this.currentLevelIndex = levelIndex;
         this.victory = false;
         this.defeat = false;
+        this.warmupFrames = 120; // 2 seconds warmup before victory checks
 
-        // Reset state
         this.entities = [];
         this.projectiles = [];
         this.explosions = [];
         this.selectedEntities = [];
         this.messages = [];
         this.gameTime = 0;
+        this.tickCount = 0;
+        this.lastTime = 0;
         this.placingBuilding = null;
         entityIdCounter = 0;
 
@@ -258,10 +247,7 @@ export class Game {
         // Fog of war
         this.fogMap = [];
         for (let y = 0; y < this.mapH; y++) {
-            this.fogMap[y] = [];
-            for (let x = 0; x < this.mapW; x++) {
-                this.fogMap[y][x] = 0;
-            }
+            this.fogMap[y] = new Array(this.mapW).fill(0);
         }
 
         // Credits
@@ -272,33 +258,29 @@ export class Game {
         this.enemyPower = 0;
         this.enemyPowerUsed = 0;
 
-        // Place player buildings
+        // Place buildings
         for (const b of level.playerBuildings) {
             this.spawnBuilding(b.type, b.x, b.y, TEAM.PLAYER);
         }
-
-        // Place player units
         for (const u of level.playerUnits) {
             this.spawnUnit(u.type, u.x, u.y, TEAM.PLAYER);
         }
-
-        // Place enemy buildings
         for (const b of level.enemyBuildings) {
             this.spawnBuilding(b.type, b.x, b.y, TEAM.ENEMY);
         }
-
-        // Place enemy units
         for (const u of level.enemyUnits) {
             this.spawnUnit(u.type, u.x, u.y, TEAM.ENEMY);
         }
 
-        // Camera to player start
-        this.camera.x = level.playerStart.x * TILE_SIZE - (this.canvas.width - 256) / 2;
-        this.camera.y = level.playerStart.y * TILE_SIZE - this.canvas.height / 2;
+        // Camera
+        const canvasW = this.canvas ? this.canvas.width : window.innerWidth - 256;
+        const canvasH = this.canvas ? this.canvas.height : window.innerHeight;
+        this.camera.x = level.playerStart.x * TILE_SIZE - canvasW / 2;
+        this.camera.y = level.playerStart.y * TILE_SIZE - canvasH / 2;
         this.targetCamera.x = this.camera.x;
         this.targetCamera.y = this.camera.y;
 
-        // Update fog of war initially
+        // Fog
         this.updateFogOfWar();
 
         // AI
@@ -314,6 +296,9 @@ export class Game {
         this.aiTimer = 0;
         this.aiWaveTimer = 0;
 
+        // Debug
+        console.log(`Level ${levelIndex} loaded: ${this.entities.length} entities (${this.entities.filter(e=>e.team===TEAM.ENEMY && e.isBuilding && !e.dead).length} enemy buildings)`);
+
         this.resize();
     }
 
@@ -321,19 +306,10 @@ export class Game {
         const entity = new Entity({
             type, category: 'building', team, tileX, tileY
         });
-        // Center the building position
         entity.x = tileX * TILE_SIZE + (entity.sizeW * TILE_SIZE) / 2;
         entity.y = tileY * TILE_SIZE + (entity.sizeH * TILE_SIZE) / 2;
         this.entities.push(entity);
-
-        // Reserve tiles
         this.reserveTiles(entity);
-
-        // Spawn harvester from refinery
-        if (type === 'ore_refinery' && !this.buildingExists(type, team)) {
-            // First refinery spawns a harvester
-        }
-
         return entity;
     }
 
@@ -353,7 +329,7 @@ export class Game {
                 const tx = entity.tileX + dx;
                 const ty = entity.tileY + dy;
                 if (ty >= 0 && ty < this.mapH && tx >= 0 && tx < this.mapW) {
-                    this.map[ty][tx] = T.WALL; // Mark as occupied
+                    this.map[ty][tx] = T.WALL;
                 }
             }
         }
@@ -365,9 +341,7 @@ export class Game {
                 const tx = entity.tileX + dx;
                 const ty = entity.tileY + dy;
                 if (ty >= 0 && ty < this.mapH && tx >= 0 && tx < this.mapW) {
-                    if (this.map[ty][tx] === T.WALL) {
-                        this.map[ty][tx] = T.GRASS;
-                    }
+                    if (this.map[ty][tx] === T.WALL) this.map[ty][tx] = T.GRASS;
                 }
             }
         }
@@ -377,23 +351,20 @@ export class Game {
         return this.entities.some(e => e.type === type && e.team === team && !e.dead && e.buildProgress >= 100);
     }
 
-    getBuildingsByProvides(provides, team) {
-        return this.entities.filter(e => e.provides === provides && e.team === team && !e.dead && e.buildProgress >= 100);
-    }
-
     hasPrerequisite(prereq, team) {
         if (!prereq) return true;
         return this.buildingExists(prereq, team);
     }
 
-    // ===== UPDATE LOOP =====
+    // ===== UPDATE =====
     update(timestamp) {
         if (this.state !== 'playing') return;
         if (!this.lastTime) this.lastTime = timestamp;
 
-        this.dt = Math.min((timestamp - this.lastTime) / (1000 / this.tickRate), 3);
+        this.dt = Math.min((timestamp - this.lastTime) / (1000 / 60), 3);
         this.lastTime = timestamp;
-        this.gameTime += 1/60;
+        this.gameTime += 1 / 60;
+        this.tickCount++;
 
         this.updateCamera();
         this.updateSelection();
@@ -406,61 +377,52 @@ export class Game {
         this.updateFogOfWar();
         this.updatePower();
         this.updateAI(timestamp);
-        this.checkVictoryDefeat();
 
-        // Remove dead entities
+        // Only check victory after warmup
+        if (this.warmupFrames > 0) {
+            this.warmupFrames--;
+        } else {
+            this.checkVictoryDefeat();
+        }
+
+        // Cleanup dead
         this.entities = this.entities.filter(e => !e.dead || e.deathTimer < 30);
-        this.entities.forEach(e => {
-            if (e.dead) e.deathTimer++;
-        });
+        this.entities.forEach(e => { if (e.dead) e.deathTimer++; });
     }
 
     updateCamera() {
-        // Keyboard scrolling
-        const scrollSpeed = 10;
-        if (this.keys['KeyW'] || this.keys['ArrowUp']) this.targetCamera.y -= scrollSpeed;
-        if (this.keys['KeyS'] || this.keys['ArrowDown']) this.targetCamera.y += scrollSpeed;
-        if (this.keys['KeyA'] || this.keys['ArrowLeft']) this.targetCamera.x -= scrollSpeed;
-        if (this.keys['KeyD'] || this.keys['ArrowRight']) this.targetCamera.x += scrollSpeed;
+        const spd = 10;
+        if (this.keys['KeyW'] || this.keys['ArrowUp']) this.targetCamera.y -= spd;
+        if (this.keys['KeyS'] || this.keys['ArrowDown']) this.targetCamera.y += spd;
+        if (this.keys['KeyA'] || this.keys['ArrowLeft']) this.targetCamera.x -= spd;
+        if (this.keys['KeyD'] || this.keys['ArrowRight']) this.targetCamera.x += spd;
 
-        // Clamp camera
-        const maxX = this.mapW * TILE_SIZE - (this.canvas.width - 256);
+        if (!this.canvas) return;
+        const maxX = this.mapW * TILE_SIZE - this.canvas.width;
         const maxY = this.mapH * TILE_SIZE - this.canvas.height;
         this.targetCamera.x = clamp(this.targetCamera.x, 0, Math.max(0, maxX));
         this.targetCamera.y = clamp(this.targetCamera.y, 0, Math.max(0, maxY));
 
-        // Smooth camera
         this.camera.x += (this.targetCamera.x - this.camera.x) * 0.15;
         this.camera.y += (this.targetCamera.y - this.camera.y) * 0.15;
     }
 
     updateSelection() {
-        // Remove dead entities from selection
         this.selectedEntities = this.selectedEntities.filter(e => !e.dead);
     }
 
     updateUnits() {
         for (const entity of this.entities) {
             if (entity.dead || !entity.isUnit) continue;
-
-            // Animation
             entity.animFrame += 0.02;
 
-            // Face direction of movement
             if (entity.path.length > 0) {
                 const next = entity.path[0];
                 const nx = next.x * TILE_SIZE + TILE_SIZE / 2;
                 const ny = next.y * TILE_SIZE + TILE_SIZE / 2;
                 entity.facing = angle(entity.x, entity.y, nx, ny);
-            }
 
-            // Movement along path
-            if (entity.path.length > 0) {
-                const next = entity.path[0];
-                const nx = next.x * TILE_SIZE + TILE_SIZE / 2;
-                const ny = next.y * TILE_SIZE + TILE_SIZE / 2;
                 const d = dist(entity.x, entity.y, nx, ny);
-
                 if (d < 4) {
                     entity.path.shift();
                 } else {
@@ -471,10 +433,7 @@ export class Game {
                     entity.tileX = Math.floor(entity.x / TILE_SIZE);
                     entity.tileY = Math.floor(entity.y / TILE_SIZE);
                 }
-            }
-
-            // Move to target if no path
-            if (entity.targetX !== null && entity.targetY !== null && entity.path.length === 0) {
+            } else if (entity.targetX !== null && entity.targetY !== null) {
                 const d = dist(entity.x, entity.y, entity.targetX, entity.targetY);
                 if (d > 4) {
                     const a = angle(entity.x, entity.y, entity.targetX, entity.targetY);
@@ -488,30 +447,20 @@ export class Game {
                 }
             }
 
-            // Attack target tracking
-            if (entity.attackTarget) {
-                if (entity.attackTarget.dead) {
-                    entity.attackTarget = null;
-                } else {
-                    // Update path to follow target
-                    const d = dist(entity.x, entity.y, entity.attackTarget.x, entity.attackTarget.y);
-                    if (d > entity.attackRange * 0.9) {
-                        // Move toward target
-                        if (entity.path.length === 0) {
-                            const tx = Math.floor(entity.attackTarget.x / TILE_SIZE);
-                            const ty = Math.floor(entity.attackTarget.y / TILE_SIZE);
-                            entity.path = findPath(
-                                this.map, 
-                                Math.floor(entity.x / TILE_SIZE), 
-                                Math.floor(entity.y / TILE_SIZE),
-                                tx, ty,
-                                this.entities.filter(e => e.isBuilding && !e.dead),
-                                this.mapW, this.mapH
-                            );
-                        }
-                    } else {
-                        entity.path = [];
-                    }
+            // Follow attack target
+            if (entity.attackTarget && !entity.attackTarget.dead) {
+                const d = dist(entity.x, entity.y, entity.attackTarget.x, entity.attackTarget.y);
+                if (d > entity.attackRange * 0.9 && entity.path.length === 0) {
+                    const tx = Math.floor(entity.attackTarget.x / TILE_SIZE);
+                    const ty = Math.floor(entity.attackTarget.y / TILE_SIZE);
+                    entity.path = findPath(
+                        this.map,
+                        Math.floor(entity.x / TILE_SIZE),
+                        Math.floor(entity.y / TILE_SIZE),
+                        tx, ty,
+                        this.entities.filter(e => e.isBuilding && !e.dead),
+                        this.mapW, this.mapH
+                    );
                 }
             }
         }
@@ -521,7 +470,6 @@ export class Game {
         for (const entity of this.entities) {
             if (entity.dead || !entity.isBuilding) continue;
 
-            // Under construction
             if (entity.beingBuilt) {
                 entity.buildProgress += this.dt * (100 / (entity.buildTime * 60));
                 if (entity.buildProgress >= 100) {
@@ -531,21 +479,16 @@ export class Game {
                     this.audio.play('build');
                     this.addMessage(`${entity.name} complete!`, 'success');
 
-                    // Spawn harvester from refinery
                     if (entity.type === 'ore_refinery' && entity.spawnsUnit) {
                         const hx = entity.tileX + entity.sizeW;
                         const hy = entity.tileY + entity.sizeH - 1;
                         this.spawnUnit('harvester', hx, hy, entity.team);
-                        if (entity.team === TEAM.PLAYER) {
-                            this.addMessage('Harvester deployed!', '');
-                        }
                     }
                 } else {
                     entity.hp = entity.maxHp * (entity.buildProgress / 100);
                 }
             }
 
-            // Production
             if (entity.productionQueue.length > 0 && !entity.beingBuilt && entity.buildProgress >= 100) {
                 if (!entity.productionItem) {
                     entity.productionItem = entity.productionQueue.shift();
@@ -562,34 +505,26 @@ export class Game {
 
                     if (entity.productionProgress >= 100) {
                         entity.productionProgress = 100;
-
-                        // Spawn unit near building
                         const sx = entity.tileX + entity.sizeW;
                         const sy = entity.tileY + entity.sizeH - 1;
-
-                        // Find walkable spawn point
                         let spawnX = sx, spawnY = sy;
                         for (let r = 0; r < 5; r++) {
-                            for (let dy = -r; dy <= r; dy++) {
-                                for (let dx = -r; dx <= r; dx++) {
+                            let found = false;
+                            for (let dy = -r; dy <= r && !found; dy++) {
+                                for (let dx = -r; dx <= r && !found; dx++) {
                                     const tx = sx + dx, ty = sy + dy;
                                     if (ty >= 0 && ty < this.mapH && tx >= 0 && tx < this.mapW && TILE_WALKABLE[this.map[ty][tx]]) {
-                                        spawnX = tx;
-                                        spawnY = ty;
-                                        r = 5; // break outer
-                                        break;
+                                        spawnX = tx; spawnY = ty; found = true;
                                     }
                                 }
                             }
+                            if (found) break;
                         }
-
-                        const unit = this.spawnUnit(entity.productionItem, spawnX, spawnY, entity.team);
-
+                        this.spawnUnit(entity.productionItem, spawnX, spawnY, entity.team);
                         if (entity.team === TEAM.PLAYER) {
                             this.addMessage(`${def.name} trained!`, 'success');
                             this.audio.play('build');
                         }
-
                         entity.productionItem = null;
                         entity.productionProgress = 0;
                     }
@@ -601,15 +536,14 @@ export class Game {
     updateCombat() {
         for (const entity of this.entities) {
             if (entity.dead || !entity.canAttack) continue;
-            if (entity.beingBuilt || (entity.isBuilding && entity.buildProgress < 100)) continue;
+            if (entity.beingBuilt) continue;
+            if (entity.isBuilding && entity.buildProgress < 100) continue;
 
-            // Attack cooldown
             if (entity.attackCooldown > 0) {
                 entity.attackCooldown -= this.dt;
                 continue;
             }
 
-            // Find attack target if none
             if (!entity.attackTarget || entity.attackTarget.dead) {
                 entity.attackTarget = this.findAttackTarget(entity);
             }
@@ -620,11 +554,8 @@ export class Game {
             const d = dist(entity.x, entity.y, target.x, target.y);
 
             if (d <= entity.attackRange && this.hasLineOfSight(entity, target)) {
-                // Fire!
                 this.fireProjectile(entity, target);
                 entity.attackCooldown = entity.attackCooldownMax;
-
-                // Face target
                 entity.facing = angle(entity.x, entity.y, target.x, target.y);
             }
         }
@@ -632,20 +563,14 @@ export class Game {
 
     findAttackTarget(entity) {
         let bestTarget = null;
-        let bestDist = entity.attackRange * 1.5; // Auto-acquire range
+        let bestDist = entity.attackRange * 1.5;
 
         for (const other of this.entities) {
             if (other.dead || other.team === entity.team) continue;
-            if (other.isInvisible && entity.team !== TEAM.PLAYER) continue;
-
-            // Air units can only be hit by anti-air
             if (other.isAir && !entity.antiAir) continue;
-            // Ground turrets can't hit air
-            if (other.isAir && entity.isBuilding && !entity.antiAir) continue;
 
             const d = dist(entity.x, entity.y, other.x, other.y);
             if (d < bestDist) {
-                // Priority: attacking units that are attacking us
                 if (other.attackTarget === entity) {
                     bestDist = d;
                     bestTarget = other;
@@ -655,23 +580,20 @@ export class Game {
                 }
             }
         }
-
         return bestTarget;
     }
 
     hasLineOfSight(a, b) {
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
         const steps = Math.ceil(dist(a.x, a.y, b.x, b.y) / (TILE_SIZE / 2));
-        for (let i = 0; i < steps; i++) {
+        for (let i = 1; i < steps; i++) {
             const t = i / steps;
-            const x = a.x + dx * t;
-            const y = a.y + dy * t;
+            const x = a.x + (b.x - a.x) * t;
+            const y = a.y + (b.y - a.y) * t;
             const tx = Math.floor(x / TILE_SIZE);
             const ty = Math.floor(y / TILE_SIZE);
             if (ty >= 0 && ty < this.mapH && tx >= 0 && tx < this.mapW) {
                 const tile = this.map[ty][tx];
-                if (tile === T.ROCK || tile === T.WALL || tile === T.WATER) return false;
+                if (tile === T.ROCK || tile === T.WATER) return false;
             }
         }
         return true;
@@ -679,81 +601,55 @@ export class Game {
 
     fireProjectile(attacker, target) {
         this.projectiles.push(new Projectile({
-            x: attacker.x,
-            y: attacker.y,
-            targetX: target.x,
-            targetY: target.y,
-            target: target,
-            damage: attacker.attackDamage,
-            splash: attacker.splash,
-            owner: attacker,
-            team: attacker.team,
+            x: attacker.x, y: attacker.y,
+            targetX: target.x, targetY: target.y,
+            target, damage: attacker.attackDamage,
+            splash: attacker.splash, owner: attacker, team: attacker.team,
         }));
-
-        if (attacker.team === TEAM.PLAYER && !attacker.isBuilding) {
-            // Don't spam sounds
-        }
         this.audio.play('attack');
     }
 
     updateProjectiles() {
         for (const proj of this.projectiles) {
             if (proj.dead) continue;
-
             proj.x += proj.dx * this.dt;
             proj.y += proj.dy * this.dt;
-
-            // Check if reached target area
             const d = dist(proj.x, proj.y, proj.targetX, proj.targetY);
-            if (d < 10 || !proj.target || proj.target.dead) {
-                // Hit!
+            if (d < 12 || !proj.target || proj.target.dead) {
                 this.applyProjectileHit(proj);
                 proj.dead = true;
             }
         }
-
         this.projectiles = this.projectiles.filter(p => !p.dead);
     }
 
     applyProjectileHit(proj) {
         if (proj.splash > 0) {
-            // Splash damage
             this.explosions.push({ x: proj.x, y: proj.y, radius: proj.splash, timer: 15 });
             this.audio.play('explosion');
-
             for (const entity of this.entities) {
                 if (entity.dead || entity.team === proj.team) continue;
                 const d = dist(entity.x, entity.y, proj.x, proj.y);
                 if (d <= proj.splash) {
-                    const dmg = proj.damage * (1 - d / proj.splash * 0.5);
-                    this.dealDamage(entity, dmg, proj.owner);
+                    this.dealDamage(entity, proj.damage * (1 - d / proj.splash * 0.5));
                 }
             }
-        } else {
-            // Single target
-            if (proj.target && !proj.target.dead) {
-                this.dealDamage(proj.target, proj.damage, proj.owner);
-                this.explosions.push({ x: proj.x, y: proj.y, radius: 8, timer: 8 });
-            }
+        } else if (proj.target && !proj.target.dead) {
+            this.dealDamage(proj.target, proj.damage);
+            this.explosions.push({ x: proj.x, y: proj.y, radius: 8, timer: 8 });
         }
     }
 
-    dealDamage(entity, damage, attacker) {
-        // Armor reduction
+    dealDamage(entity, damage) {
         const armor = entity.armor || 0;
-        const actualDamage = Math.max(1, damage - armor * 0.5);
-        entity.hp -= actualDamage;
-
-        if (entity.hp <= 0) {
-            this.killEntity(entity);
-        }
+        entity.hp -= Math.max(1, damage - armor * 0.5);
+        if (entity.hp <= 0) this.killEntity(entity);
     }
 
     killEntity(entity) {
         entity.hp = 0;
         entity.dead = true;
         entity.deathTimer = 0;
-
         if (entity.isBuilding) {
             this.freeTiles(entity);
             this.explosions.push({ x: entity.x, y: entity.y, radius: entity.sizeW * TILE_SIZE, timer: 30 });
@@ -761,116 +657,82 @@ export class Game {
         } else {
             this.explosions.push({ x: entity.x, y: entity.y, radius: 12, timer: 15 });
         }
-
-        // Remove from selections
         this.selectedEntities = this.selectedEntities.filter(e => e !== entity);
-
-        // Harvester drops ore
         if (entity.isHarvester && entity.ore > 0 && entity.team === TEAM.PLAYER) {
             this.playerCredits += Math.floor(entity.ore * 5);
         }
     }
 
     updateExplosions() {
-        for (const exp of this.explosions) {
-            exp.timer--;
-        }
+        for (const e of this.explosions) e.timer--;
         this.explosions = this.explosions.filter(e => e.timer > 0);
     }
 
     updateHarvesters() {
         for (const entity of this.entities) {
-            if (entity.dead || !entity.isHarvester) continue;
-            if (entity.beingBuilt) continue;
-            if (entity.attackTarget) continue; // Don't harvest while attacking
+            if (entity.dead || !entity.isHarvester || entity.beingBuilt) continue;
+            if (entity.attackTarget) continue;
 
             if (entity.team === TEAM.ENEMY) {
                 this.updateAIHarvester(entity);
                 continue;
             }
 
-            // Player harvester AI
             if (entity.ore >= entity.oreCapacity) {
-                // Full - return to refinery
                 if (!entity.returning) {
                     entity.returning = true;
                     entity.harvesting = false;
                     entity.harvestTarget = null;
-
-                    // Find nearest refinery
-                    const refinery = this.findNearest(entity, this.entities.filter(e => 
+                    const refinery = this.entities.find(e =>
                         e.type === 'ore_refinery' && e.team === TEAM.PLAYER && !e.dead && e.buildProgress >= 100
-                    ));
-
+                    );
                     if (refinery) {
-                        entity.path = findPath(
-                            this.map,
-                            Math.floor(entity.x / TILE_SIZE),
-                            Math.floor(entity.y / TILE_SIZE),
-                            refinery.tileX + refinery.sizeW - 1,
-                            refinery.tileY,
+                        entity.path = findPath(this.map,
+                            Math.floor(entity.x / TILE_SIZE), Math.floor(entity.y / TILE_SIZE),
+                            refinery.tileX + refinery.sizeW - 1, refinery.tileY,
                             this.entities.filter(e => e.isBuilding && !e.dead),
                             this.mapW, this.mapH
                         );
-                        entity.targetX = refinery.x;
-                        entity.targetY = refinery.y;
                     }
                 }
-
-                // Check if at refinery
-                const refinery = this.entities.find(e => 
+                const refinery = this.entities.find(e =>
                     e.type === 'ore_refinery' && e.team === TEAM.PLAYER && !e.dead && e.buildProgress >= 100
                 );
-                if (refinery) {
-                    const d = dist(entity.x, entity.y, refinery.x, refinery.y);
-                    if (d < TILE_SIZE * 2) {
-                        // Unload
-                        const credits = Math.floor(entity.ore * 5);
-                        this.playerCredits += credits;
-                        entity.ore = 0;
-                        entity.returning = false;
-                        entity.path = [];
-                        this.addMessage(`+$${credits} credits`, 'success');
-                    }
+                if (refinery && dist(entity.x, entity.y, refinery.x, refinery.y) < TILE_SIZE * 2) {
+                    const credits = Math.floor(entity.ore * 5);
+                    this.playerCredits += credits;
+                    entity.ore = 0;
+                    entity.returning = false;
+                    entity.path = [];
+                    this.addMessage(`+$${credits}`, 'success');
                 }
             } else if (!entity.harvesting) {
-                // Find ore
                 entity.returning = false;
                 const oreTile = this.findNearestOre(entity);
                 if (oreTile) {
                     entity.harvesting = true;
                     entity.harvestTarget = oreTile;
-                    entity.path = findPath(
-                        this.map,
-                        Math.floor(entity.x / TILE_SIZE),
-                        Math.floor(entity.y / TILE_SIZE),
+                    entity.path = findPath(this.map,
+                        Math.floor(entity.x / TILE_SIZE), Math.floor(entity.y / TILE_SIZE),
                         oreTile.x, oreTile.y,
                         this.entities.filter(e => e.isBuilding && !e.dead),
                         this.mapW, this.mapH
                     );
                 }
             } else {
-                // Harvesting - check if at ore tile
                 if (entity.harvestTarget) {
-                    const d = dist(entity.x, entity.y, 
+                    const d = dist(entity.x, entity.y,
                         entity.harvestTarget.x * TILE_SIZE + TILE_SIZE / 2,
                         entity.harvestTarget.y * TILE_SIZE + TILE_SIZE / 2);
-
                     if (d < TILE_SIZE) {
-                        // Check if there's still ore
                         if (this.map[entity.harvestTarget.y]?.[entity.harvestTarget.x] === T.ORE) {
-                            entity.ore += 0.1 * this.dt;
-                            if (entity.ore >= entity.oreCapacity) {
-                                entity.ore = entity.oreCapacity;
-                            }
+                            entity.ore = Math.min(entity.ore + 0.1 * this.dt, entity.oreCapacity);
                         } else {
-                            // Ore depleted, find more
                             entity.harvesting = false;
                             entity.harvestTarget = null;
                             entity.path = [];
                         }
                     }
-
                     if (entity.path.length === 0 && d > TILE_SIZE) {
                         entity.harvesting = false;
                         entity.harvestTarget = null;
@@ -887,25 +749,19 @@ export class Game {
             if (!entity.returning) {
                 entity.returning = true;
                 entity.harvesting = false;
-                const refinery = this.entities.find(e => 
+                const refinery = this.entities.find(e =>
                     e.type === 'ore_refinery' && e.team === TEAM.ENEMY && !e.dead && e.buildProgress >= 100
                 );
                 if (refinery) {
-                    entity.path = findPath(
-                        this.map,
-                        Math.floor(entity.x / TILE_SIZE),
-                        Math.floor(entity.y / TILE_SIZE),
-                        refinery.tileX + refinery.sizeW - 1,
-                        refinery.tileY,
+                    entity.path = findPath(this.map,
+                        Math.floor(entity.x / TILE_SIZE), Math.floor(entity.y / TILE_SIZE),
+                        refinery.tileX + refinery.sizeW - 1, refinery.tileY,
                         this.entities.filter(e => e.isBuilding && !e.dead),
                         this.mapW, this.mapH
                     );
-                    entity.targetX = refinery.x;
-                    entity.targetY = refinery.y;
                 }
             }
-
-            const refinery = this.entities.find(e => 
+            const refinery = this.entities.find(e =>
                 e.type === 'ore_refinery' && e.team === TEAM.ENEMY && !e.dead && e.buildProgress >= 100
             );
             if (refinery && dist(entity.x, entity.y, refinery.x, refinery.y) < TILE_SIZE * 2) {
@@ -920,10 +776,8 @@ export class Game {
             if (oreTile) {
                 entity.harvesting = true;
                 entity.harvestTarget = oreTile;
-                entity.path = findPath(
-                    this.map,
-                    Math.floor(entity.x / TILE_SIZE),
-                    Math.floor(entity.y / TILE_SIZE),
+                entity.path = findPath(this.map,
+                    Math.floor(entity.x / TILE_SIZE), Math.floor(entity.y / TILE_SIZE),
                     oreTile.x, oreTile.y,
                     this.entities.filter(e => e.isBuilding && !e.dead),
                     this.mapW, this.mapH
@@ -935,7 +789,7 @@ export class Game {
                 entity.harvestTarget.y * TILE_SIZE + TILE_SIZE / 2);
             if (d < TILE_SIZE && this.map[entity.harvestTarget.y]?.[entity.harvestTarget.x] === T.ORE) {
                 entity.ore = Math.min(entity.ore + 0.1 * this.dt, entity.oreCapacity);
-            } else if (d >= TILE_SIZE || this.map[entity.harvestTarget.y]?.[entity.harvestTarget.x] !== T.ORE) {
+            } else {
                 entity.harvesting = false;
                 entity.harvestTarget = null;
                 entity.path = [];
@@ -944,9 +798,7 @@ export class Game {
     }
 
     findNearestOre(entity) {
-        let best = null;
-        let bestDist = Infinity;
-
+        let best = null, bestDist = Infinity;
         for (let y = 0; y < this.mapH; y++) {
             for (let x = 0; x < this.mapW; x++) {
                 if (this.map[y][x] === T.ORE) {
@@ -961,29 +813,11 @@ export class Game {
         return best;
     }
 
-    findNearest(entity, candidates) {
-        let best = null;
-        let bestDist = Infinity;
-        for (const c of candidates) {
-            const d = dist(entity.x, entity.y, c.x, c.y);
-            if (d < bestDist) {
-                bestDist = d;
-                best = c;
-            }
-        }
-        return best;
-    }
-
     updatePower() {
-        this.playerPower = 0;
-        this.playerPowerUsed = 0;
-        this.enemyPower = 0;
-        this.enemyPowerUsed = 0;
-
+        this.playerPower = 0; this.playerPowerUsed = 0;
+        this.enemyPower = 0; this.enemyPowerUsed = 0;
         for (const entity of this.entities) {
-            if (entity.dead || !entity.isBuilding) continue;
-            if (entity.buildProgress < 100) continue;
-
+            if (entity.dead || !entity.isBuilding || entity.buildProgress < 100) continue;
             if (entity.team === TEAM.PLAYER) {
                 this.playerPower += entity.powerProvided;
                 this.playerPowerUsed += entity.powerUsed;
@@ -995,85 +829,84 @@ export class Game {
     }
 
     updateFogOfWar() {
-        // Decay visibility to explored
         for (let y = 0; y < this.mapH; y++) {
             for (let x = 0; x < this.mapW; x++) {
-                if (this.fogMap[y][x] === 2) {
-                    this.fogMap[y][x] = 1;
-                }
+                if (this.fogMap[y][x] === 2) this.fogMap[y][x] = 1;
             }
         }
-
-        // Set visible around player entities
         for (const entity of this.entities) {
             if (entity.dead || entity.team !== TEAM.PLAYER) continue;
             if (entity.beingBuilt && entity.buildProgress < 50) continue;
-
-            const viewRange = entity.isBuilding ? 
-                (entity.provides === 'radar' ? 15 : 6) : 7;
-
+            const vr = entity.isBuilding ? (entity.provides === 'radar' ? 15 : 8) : 7;
             const cx = Math.floor(entity.x / TILE_SIZE);
             const cy = Math.floor(entity.y / TILE_SIZE);
-
-            for (let dy = -viewRange; dy <= viewRange; dy++) {
-                for (let dx = -viewRange; dx <= viewRange; dx++) {
-                    const tx = cx + dx;
-                    const ty = cy + dy;
+            for (let dy = -vr; dy <= vr; dy++) {
+                for (let dx = -vr; dx <= vr; dx++) {
+                    const tx = cx + dx, ty = cy + dy;
                     if (tx >= 0 && tx < this.mapW && ty >= 0 && ty < this.mapH) {
-                        if (dx * dx + dy * dy <= viewRange * viewRange) {
-                            this.fogMap[ty][tx] = 2;
-                        }
+                        if (dx * dx + dy * dy <= vr * vr) this.fogMap[ty][tx] = 2;
                     }
                 }
             }
         }
-
-        // Update entity visibility
         for (const entity of this.entities) {
-            if (entity.team === TEAM.PLAYER) {
-                entity.visible = true;
-                continue;
-            }
-
+            if (entity.team === TEAM.PLAYER) { entity.visible = true; continue; }
             const tx = Math.floor(entity.x / TILE_SIZE);
             const ty = Math.floor(entity.y / TILE_SIZE);
-            entity.visible = (this.fogMap[ty]?.[tx] || 0) === 2;
+            entity.visible = (this.fogMap[ty]?.[tx] || 0) >= 2;
         }
     }
 
     checkVictoryDefeat() {
         if (this.victory || this.defeat) return;
-
         const level = this.currentLevel;
+        if (!level) return;
 
-        // Check time limit
+        // Time limit
         if (level.timeLimit > 0 && this.gameTime >= level.timeLimit) {
             this.defeat = true;
-            this.addMessage('TIME LIMIT EXPIRED!', 'warning');
+            this.audio.play('defeat');
+            this.addMessage('TIME EXPIRED!', 'warning');
             return;
         }
 
-        // Check survive condition
-        if (level.victoryCondition === 'survive_time') {
-            if (this.gameTime >= level.surviveTime) {
+        // Survive
+        if (level.victoryCondition === 'survive_time' && this.gameTime >= level.surviveTime) {
+            this.victory = true;
+            this.audio.play('victory');
+            this.addMessage('MISSION COMPLETE!', 'success');
+            this.onLevelComplete();
+            return;
+        }
+
+        // Destroy all
+        if (level.victoryCondition === 'destroy_all') {
+            const enemyBuildings = this.entities.filter(e => e.team === TEAM.ENEMY && e.isBuilding && !e.dead);
+            if (enemyBuildings.length === 0) {
                 this.victory = true;
                 this.audio.play('victory');
                 this.addMessage('MISSION COMPLETE!', 'success');
+                this.onLevelComplete();
                 return;
             }
         }
 
-        // Check destroy conditions
-        const playerCY = this.entities.find(e => 
-            e.type === 'construction_yard' && e.team === TEAM.PLAYER && !e.dead
-        );
-        const enemyCY = this.entities.find(e => 
-            e.type === 'construction_yard' && e.team === TEAM.ENEMY && !e.dead
-        );
+        // Destroy specific building
+        if (level.victoryCondition === 'destroy_building_type') {
+            const target = this.entities.find(e =>
+                e.type === level.destroyTarget && e.team === TEAM.ENEMY && !e.dead
+            );
+            if (!target) {
+                this.victory = true;
+                this.audio.play('victory');
+                this.addMessage('MISSION COMPLETE!', 'success');
+                this.onLevelComplete();
+                return;
+            }
+        }
 
-        // Player loses if no construction yard (and no base was provided)
-        if (!playerCY && level.playerBuildings.some(b => b.type === 'construction_yard')) {
-            // Check if player has any buildings left
+        // Defeat: player lost everything
+        if (!level.noBase) {
             const playerBuildings = this.entities.filter(e => e.team === TEAM.PLAYER && e.isBuilding && !e.dead);
             const playerUnits = this.entities.filter(e => e.team === TEAM.PLAYER && e.isUnit && !e.dead);
             if (playerBuildings.length === 0 && playerUnits.length === 0) {
@@ -1082,40 +915,12 @@ export class Game {
                 this.addMessage('MISSION FAILED!', 'warning');
                 return;
             }
-        }
-
-        // Check for no-base missions
-        if (level.noBase) {
+        } else {
             const playerUnits = this.entities.filter(e => e.team === TEAM.PLAYER && !e.dead);
             if (playerUnits.length === 0) {
                 this.defeat = true;
                 this.audio.play('defeat');
                 return;
-            }
-        }
-
-        // Victory: destroy all enemy buildings (for destroy_all)
-        if (level.victoryCondition === 'destroy_all') {
-            const enemyBuildings = this.entities.filter(e => e.team === TEAM.ENEMY && e.isBuilding && !e.dead);
-            const enemyUnits = this.entities.filter(e => e.team === TEAM.ENEMY && e.isUnit && !e.dead);
-            if (enemyBuildings.length === 0) {
-                this.victory = true;
-                this.audio.play('victory');
-                this.addMessage('MISSION COMPLETE!', 'success');
-                this.onLevelComplete();
-            }
-        }
-
-        // Check specific building destruction
-        if (level.victoryCondition === 'destroy_building_type') {
-            const target = this.entities.find(e => 
-                e.type === level.destroyTarget && e.team === TEAM.ENEMY && !e.dead
-            );
-            if (!target) {
-                this.victory = true;
-                this.audio.play('victory');
-                this.addMessage('MISSION COMPLETE!', 'success');
-                this.onLevelComplete();
             }
         }
     }
@@ -1133,23 +938,13 @@ export class Game {
 
     // ===== AI =====
     updateAI(timestamp) {
-        if (!this.ai) return;
-        if (this.victory || this.defeat) return;
-
+        if (!this.ai || this.victory || this.defeat) return;
         const diff = this.ai.difficulty;
         this.aiTimer++;
 
-        // Build structures
-        if (this.aiTimer % Math.floor(300 / diff) === 0) {
-            this.aiBuildStructure();
-        }
+        if (this.aiTimer % Math.floor(300 / Math.max(0.1, diff)) === 0) this.aiBuildStructure();
+        if (this.aiTimer % Math.floor(150 / Math.max(0.1, diff)) === 0) this.aiProduceUnit();
 
-        // Produce units
-        if (this.aiTimer % Math.floor(150 / diff) === 0) {
-            this.aiProduceUnit();
-        }
-
-        // Attack waves
         this.aiWaveTimer++;
         const waveInterval = Math.max(200, 900 - diff * 700);
         if (this.aiWaveTimer >= waveInterval) {
@@ -1160,31 +955,28 @@ export class Game {
 
     aiBuildStructure() {
         const diff = this.ai.difficulty;
-        const enemyBuildings = this.entities.filter(e => e.team === TEAM.ENEMY && e.isBuilding && !e.dead && !e.beingBuilt);
-
-        // Find construction yard
-        const cy = enemyBuildings.find(e => e.type === 'construction_yard' && e.buildProgress >= 100);
+        const cy = this.entities.find(e =>
+            e.type === 'construction_yard' && e.team === TEAM.ENEMY && !e.dead && !e.beingBuilt && e.buildProgress >= 100
+        );
         if (!cy || cy.productionItem) return;
 
-        // Determine what to build
-        const buildPriority = ['power_plant', 'ore_refinery', 'barracks', 'war_factory', 
-                              'turret', 'pillbox', 'advanced_power', 'radar_dome', 'tech_center'];
+        const priority = ['power_plant', 'ore_refinery', 'barracks', 'war_factory',
+                          'turret', 'pillbox', 'advanced_power', 'radar_dome', 'tech_center'];
 
-        for (const type of buildPriority) {
+        for (const type of priority) {
             if (Math.random() > diff) continue;
             if (this.buildingExists(type, TEAM.ENEMY)) continue;
-
             const def = BUILDINGS[type];
             if (!def) continue;
             if (this.enemyCredits < def.cost * 1.2) continue;
             if (def.prerequisite && !this.buildingExists(def.prerequisite, TEAM.ENEMY)) continue;
 
-            // Find placement spot
             const spot = this.aiFindBuildSpot(cy, def.size.w, def.size.h);
             if (!spot) continue;
 
-            // Check if placement is valid
-            if (this.canPlaceBuilding(type, spot.x * TILE_SIZE, spot.y * TILE_SIZE, TEAM.ENEMY)) {
+            const wx = spot.x * TILE_SIZE;
+            const wy = spot.y * TILE_SIZE;
+            if (this.canPlaceBuilding(type, wx, wy, TEAM.ENEMY)) {
                 this.enemyCredits -= def.cost;
                 const building = this.spawnBuilding(type, spot.x, spot.y, TEAM.ENEMY);
                 building.beingBuilt = true;
@@ -1195,59 +987,43 @@ export class Game {
         }
     }
 
-    aiFindBuildSpot(constructionYard, w, h) {
-        const cx = constructionYard.tileX;
-        const cy = constructionYard.tileY;
-
-        // Try spots around the construction yard
+    aiFindBuildSpot(cy, w, h) {
         const candidates = [];
         for (let r = 2; r < 12; r++) {
             for (let dy = -r; dy <= r; dy++) {
                 for (let dx = -r; dx <= r; dx++) {
                     if (Math.abs(dx) === r || Math.abs(dy) === r) {
-                        candidates.push({ x: cx + dx, y: cy + dy });
+                        candidates.push({ x: cy.tileX + dx, y: cy.tileY + dy });
                     }
                 }
             }
         }
-
-        // Sort by distance
-        candidates.sort((a, b) => 
-            manhattanDist(a.x, a.y, cx, cy) - manhattanDist(b.x, b.y, cx, cy)
-        );
-
-        return candidates.find(spot => this.canPlaceBuilding('construction_yard', spot.x * TILE_SIZE, spot.y * TILE_SIZE, TEAM.ENEMY, w, h));
+        candidates.sort((a, b) => manhattanDist(a.x, a.y, cy.tileX, cy.tileY) - manhattanDist(b.x, b.y, cy.tileX, cy.tileY));
+        return candidates.find(s => {
+            const wx = s.x * TILE_SIZE;
+            const wy = s.y * TILE_SIZE;
+            return this.canPlaceBuilding('power_plant', wx, wy, TEAM.ENEMY, w, h);
+        });
     }
 
     aiProduceUnit() {
-        const diff = this.ai.difficulty;
-
-        // Find production buildings
         for (const building of this.entities) {
-            if (building.dead || building.team !== TEAM.ENEMY) continue;
-            if (building.beingBuilt || building.buildProgress < 100) continue;
+            if (building.dead || building.team !== TEAM.ENEMY || building.beingBuilt || building.buildProgress < 100) continue;
             if (building.productionQueue.length >= 3) continue;
 
             if (building.type === 'barracks') {
-                const unitTypes = ['infantry', 'rocket_soldier', 'grenadier'];
-                const type = unitTypes[Math.floor(Math.random() * unitTypes.length)];
+                const types = ['infantry', 'rocket_soldier', 'grenadier'];
+                const type = types[Math.floor(Math.random() * types.length)];
                 const def = UNITS[type];
                 if (def && this.enemyCredits >= def.cost) {
                     this.enemyCredits -= def.cost;
                     building.productionQueue.push(type);
                 }
             } else if (building.type === 'war_factory') {
-                const unitTypes = ['light_tank', 'heavy_tank'];
-                if (Math.random() < 0.2) unitTypes.push('artillery');
-                if (this.buildingExists('tech_center', TEAM.ENEMY) && Math.random() < 0.15) {
-                    unitTypes.push('mammoth_tank');
-                }
-                if (Math.random() < 0.3) unitTypes.push('harvester');
-                if (!this.entities.some(e => e.type === 'harvester' && e.team === TEAM.ENEMY && !e.dead)) {
-                    unitTypes.push('harvester');
-                }
-
-                const type = unitTypes[Math.floor(Math.random() * unitTypes.length)];
+                let types = ['light_tank', 'heavy_tank'];
+                if (Math.random() < 0.2) types.push('artillery');
+                if (!this.entities.some(e => e.type === 'harvester' && e.team === TEAM.ENEMY && !e.dead)) types.push('harvester');
+                const type = types[Math.floor(Math.random() * types.length)];
                 const def = UNITS[type];
                 if (def && this.enemyCredits >= def.cost) {
                     this.enemyCredits -= def.cost;
@@ -1259,54 +1035,34 @@ export class Game {
 
     aiLaunchAttack() {
         const diff = this.ai.difficulty;
-
-        // Gather idle military units
-        const militaryUnits = this.entities.filter(e => 
-            e.team === TEAM.ENEMY && !e.dead && e.isUnit && 
-            e.canAttack && !e.isHarvester &&
-            (!e.attackTarget || e.attackTarget.dead) &&
-            e.path.length === 0
+        const units = this.entities.filter(e =>
+            e.team === TEAM.ENEMY && !e.dead && e.isUnit && e.canAttack && !e.isHarvester &&
+            (!e.attackTarget || e.attackTarget.dead) && e.path.length === 0
         );
+        if (units.length < 2) return;
 
-        if (militaryUnits.length < 2) return;
+        const targets = this.entities.filter(e => e.team === TEAM.PLAYER && !e.dead && e.isBuilding);
+        if (targets.length === 0) return;
 
-        // Find player target
-        const playerBuildings = this.entities.filter(e => 
-            e.team === TEAM.PLAYER && !e.dead && e.isBuilding
-        );
-
-        if (playerBuildings.length === 0) return;
-
-        const target = playerBuildings[Math.floor(Math.random() * playerBuildings.length)];
-
-        // Send units to attack
-        const attackGroup = militaryUnits.slice(0, Math.ceil(militaryUnits.length * diff));
+        const target = targets[Math.floor(Math.random() * targets.length)];
+        const attackGroup = units.slice(0, Math.ceil(units.length * diff));
 
         for (const unit of attackGroup) {
-            const tx = Math.floor(target.x / TILE_SIZE);
-            const ty = Math.floor(target.y / TILE_SIZE);
-            unit.path = findPath(
-                this.map,
-                Math.floor(unit.x / TILE_SIZE),
-                Math.floor(unit.y / TILE_SIZE),
-                tx + randInt(-2, 2),
-                ty + randInt(-2, 2),
+            unit.path = findPath(this.map,
+                Math.floor(unit.x / TILE_SIZE), Math.floor(unit.y / TILE_SIZE),
+                Math.floor(target.x / TILE_SIZE) + randInt(-2, 2),
+                Math.floor(target.y / TILE_SIZE) + randInt(-2, 2),
                 this.entities.filter(e => e.isBuilding && !e.dead),
                 this.mapW, this.mapH
             );
             unit.attackTarget = target;
-            unit.targetX = target.x;
-            unit.targetY = target.y;
         }
     }
 
-    // ===== INPUT HANDLING =====
+    // ===== INPUT =====
     handleMouseDown(x, y, button) {
         this.audio.resume();
-        const worldX = x + this.camera.x;
-        const worldY = y + this.camera.y;
-
-        if (button === 0) { // Left click
+        if (button === 0) {
             this.mouse.dragging = false;
             this.mouse.dragStartX = x;
             this.mouse.dragStartY = y;
@@ -1317,24 +1073,21 @@ export class Game {
         const worldX = x + this.camera.x;
         const worldY = y + this.camera.y;
 
-        if (button === 0) { // Left click release
+        if (button === 0) {
             const dx = Math.abs(x - this.mouse.dragStartX);
             const dy = Math.abs(y - this.mouse.dragStartY);
-
             if (dx > 10 || dy > 10) {
-                // Box select
                 this.boxSelect(
-                    this.mouse.dragStartX + this.camera.x,
-                    this.mouse.dragStartY + this.camera.y,
+                    this.mouse.dragStartX + this.camera.x, this.mouse.dragStartY + this.camera.y,
                     worldX, worldY
                 );
             } else {
-                // Click select
                 this.clickSelect(worldX, worldY);
             }
-        } else if (button === 2) { // Right click
+        } else if (button === 2) {
             this.rightClick(worldX, worldY);
         }
+        this.audio.play('click');
     }
 
     handleMouseMove(x, y) {
@@ -1342,21 +1095,15 @@ export class Game {
         this.mouse.y = y;
         this.mouse.worldX = x + this.camera.x;
         this.mouse.worldY = y + this.camera.y;
-
-        const dx = Math.abs(x - this.mouse.dragStartX);
-        const dy = Math.abs(y - this.mouse.dragStartY);
-        this.mouse.dragging = (dx > 10 || dy > 10);
+        this.mouse.dragging = Math.abs(x - this.mouse.dragStartX) > 10 || Math.abs(y - this.mouse.dragStartY) > 10;
     }
 
     clickSelect(worldX, worldY) {
-        // Deselect all
         for (const e of this.selectedEntities) e.selected = false;
         this.selectedEntities = [];
         this.placingBuilding = null;
 
-        // Find entity under cursor
         const clicked = this.findEntityAt(worldX, worldY, TEAM.PLAYER);
-
         if (clicked) {
             clicked.selected = true;
             this.selectedEntities = [clicked];
@@ -1364,19 +1111,14 @@ export class Game {
     }
 
     boxSelect(x1, y1, x2, y2) {
-        // Deselect all
         for (const e of this.selectedEntities) e.selected = false;
         this.selectedEntities = [];
 
-        const left = Math.min(x1, x2);
-        const right = Math.max(x1, x2);
-        const top = Math.min(y1, y2);
-        const bottom = Math.max(y1, y2);
+        const left = Math.min(x1, x2), right = Math.max(x1, x2);
+        const top = Math.min(y1, y2), bottom = Math.max(y1, y2);
 
         for (const entity of this.entities) {
-            if (entity.dead || entity.team !== TEAM.PLAYER) continue;
-            if (!entity.isUnit) continue;
-
+            if (entity.dead || entity.team !== TEAM.PLAYER || !entity.isUnit) continue;
             if (entity.x >= left && entity.x <= right && entity.y >= top && entity.y <= bottom) {
                 entity.selected = true;
                 this.selectedEntities.push(entity);
@@ -1387,294 +1129,213 @@ export class Game {
     rightClick(worldX, worldY) {
         if (this.selectedEntities.length === 0) return;
 
-        // Check if clicking on enemy entity
-        const target = this.findEntityAt(worldX, worldY);
+        if (this.placingBuilding && this.placementValid) {
+            this.placeBuildingAt(worldX, worldY);
+            return;
+        }
 
+        const target = this.findEntityAt(worldX, worldY);
         if (target && target.team !== TEAM.PLAYER && target.visible) {
-            // Attack command
             for (const entity of this.selectedEntities) {
                 if (entity.canAttack) {
                     entity.attackTarget = target;
                     entity.path = [];
                 }
             }
-            this.audio.play('click');
-        } else if (this.placingBuilding && this.placementValid) {
-            // Place building
-            this.placeBuildingAt(this.mouse.worldX, this.mouse.worldY);
         } else {
-            // Move command
             const tx = Math.floor(worldX / TILE_SIZE);
             const ty = Math.floor(worldY / TILE_SIZE);
-
             for (const entity of this.selectedEntities) {
                 if (!entity.isUnit) continue;
-
-                // Stop attacking
-                if (entity.attackTarget && entity.canAttack) {
-                    // Check if still in range
-                    const d = dist(entity.x, entity.y, entity.attackTarget.x, entity.attackTarget.y);
-                    if (d > entity.attackRange * 1.5) {
-                        entity.attackTarget = null;
-                    }
-                }
-
-                entity.path = findPath(
-                    this.map,
-                    Math.floor(entity.x / TILE_SIZE),
-                    Math.floor(entity.y / TILE_SIZE),
+                entity.path = findPath(this.map,
+                    Math.floor(entity.x / TILE_SIZE), Math.floor(entity.y / TILE_SIZE),
                     tx, ty,
                     this.entities.filter(e => e.isBuilding && !e.dead),
                     this.mapW, this.mapH
                 );
-
-                // Formation offset
-                const idx = this.selectedEntities.indexOf(entity);
-                const offset = Math.floor(idx / 3);
-                entity.targetX = worldX + randInt(-20, 20);
-                entity.targetY = worldY + randInt(-20, 20);
+                entity.targetX = worldX;
+                entity.targetY = worldY;
             }
-            this.audio.play('click');
         }
     }
 
     findEntityAt(worldX, worldY, teamFilter = null) {
-        let best = null;
-        let bestDist = Infinity;
-
-        // Check units first (smaller)
+        let best = null, bestDist = Infinity;
         for (const entity of this.entities) {
             if (entity.dead) continue;
-            if (teamFilter !== null && entity.team !== teamFilter) {
-                // Still show enemy entities for right-click targeting
-                if (teamFilter === TEAM.PLAYER && entity.team !== TEAM.PLAYER && !entity.visible) continue;
-            }
+            if (teamFilter !== null && entity.team !== teamFilter) continue;
+            if (teamFilter === TEAM.PLAYER && entity.team !== TEAM.PLAYER && !entity.visible) continue;
 
-            const radius = entity.isBuilding ? 
-                Math.max(entity.sizeW, entity.sizeH) * TILE_SIZE / 2 : 
+            const radius = entity.isBuilding ?
+                Math.max(entity.sizeW, entity.sizeH) * TILE_SIZE / 2 :
                 TILE_SIZE / 2 * entity.size;
-
             const d = dist(worldX, worldY, entity.x, entity.y);
             if (d < radius && d < bestDist) {
                 bestDist = d;
                 best = entity;
             }
         }
-
         return best;
     }
 
     canPlaceBuilding(type, worldX, worldY, team, sizeW, sizeH) {
         const def = BUILDINGS[type];
+        if (!def) return false;
         const w = sizeW || def.size.w;
         const h = sizeH || def.size.h;
-
         const tx = Math.floor(worldX / TILE_SIZE);
         const ty = Math.floor(worldY / TILE_SIZE);
 
-        // Check bounds
         if (tx < 0 || ty < 0 || tx + w > this.mapW || ty + h > this.mapH) return false;
 
-        // Check tiles
         for (let dy = 0; dy < h; dy++) {
             for (let dx = 0; dx < w; dx++) {
                 const tile = this.map[ty + dy]?.[tx + dx];
-                if (tile === undefined) return false;
-                if (!TILE_WALKABLE[tile] && tile !== T.WALL) return false;
+                if (tile === undefined || (!TILE_WALKABLE[tile] && tile !== T.WALL)) return false;
             }
         }
 
-        // Check overlap with other buildings
+        // Check overlap with any buildings
         for (const entity of this.entities) {
             if (entity.dead || !entity.isBuilding) continue;
-            const ew = entity.sizeW || 1;
-            const eh = entity.sizeH || 1;
-
-            // Check AABB overlap
+            const ew = entity.sizeW, eh = entity.sizeH;
             if (tx < entity.tileX + ew && tx + w > entity.tileX &&
                 ty < entity.tileY + eh && ty + h > entity.tileY) {
-                // Allow overlap with the building being placed on (for construction yard placement)
-                // Skip if it's the same exact position and team
                 return false;
             }
         }
 
-        // Check proximity to another building (must be adjacent to existing building)
+        // Must be near existing building
         let adjacent = false;
         for (const entity of this.entities) {
-            if (entity.dead || !entity.isBuilding || entity.team !== team) continue;
-            if (entity.beingBuilt) continue;
-            const ew = entity.sizeW || 1;
-            const eh = entity.sizeH || 1;
-
-            if (tx <= entity.tileX + ew && tx + w >= entity.tileX &&
-                ty <= entity.tileY + eh && ty + h >= entity.tileY) {
-                // Overlapping - not adjacent but on top
-                continue;
-            }
-
-            // Check if within 2 tiles
+            if (entity.dead || !entity.isBuilding || entity.team !== team || entity.beingBuilt) continue;
+            const ew = entity.sizeW, eh = entity.sizeH;
             const cx1 = tx + w / 2, cy1 = ty + h / 2;
             const cx2 = entity.tileX + ew / 2, cy2 = entity.tileY + eh / 2;
-            const d = manhattanDist(cx1, cy1, cx2, cy2);
-            if (d <= Math.max(w, h) + 2) {
+            if (manhattanDist(cx1, cy1, cx2, cy2) <= Math.max(w, h) + 3) {
                 adjacent = true;
                 break;
             }
         }
-
         return adjacent;
     }
 
     placeBuildingAt(worldX, worldY) {
         if (!this.placingBuilding) return;
-
         const type = this.placingBuilding;
         const def = BUILDINGS[type];
+        if (!def) return;
         const tx = Math.floor(worldX / TILE_SIZE);
         const ty = Math.floor(worldY / TILE_SIZE);
 
-        if (!this.canPlaceBuilding(type, worldX, worldY, TEAM.PLAYER)) return;
-
-        const cost = def.cost;
-        if (this.playerCredits < cost) {
+        if (!this.canPlaceBuilding(type, worldX, worldY, TEAM.PLAYER)) {
+            this.addMessage('Cannot build here!', 'warning');
+            this.audio.play('error');
+            return;
+        }
+        if (this.playerCredits < def.cost) {
             this.addMessage('Not enough credits!', 'warning');
             this.audio.play('error');
             return;
         }
-
         if (def.prerequisite && !this.hasPrerequisite(def.prerequisite, TEAM.PLAYER)) {
             this.addMessage('Prerequisite not met!', 'warning');
             this.audio.play('error');
             return;
         }
 
-        this.playerCredits -= cost;
-
-        // Find construction yard to build from
-        const cy = this.entities.find(e => 
+        const cy = this.entities.find(e =>
             e.type === 'construction_yard' && e.team === TEAM.PLAYER && !e.dead && !e.beingBuilt
         );
-
         if (!cy) {
-            this.playerCredits += cost;
             this.addMessage('No Construction Yard!', 'warning');
             return;
         }
 
+        this.playerCredits -= def.cost;
         const building = this.spawnBuilding(type, tx, ty, TEAM.PLAYER);
         building.beingBuilt = true;
         building.buildProgress = 0;
         building.hp = 1;
-
         this.placingBuilding = null;
         this.addMessage(`Building ${def.name}...`, '');
-        this.audio.play('click');
     }
 
     startPlacingBuilding(type) {
         const def = BUILDINGS[type];
         if (!def) return;
-
         if (this.playerCredits < def.cost) {
             this.addMessage('Not enough credits!', 'warning');
             this.audio.play('error');
             return;
         }
-
         if (def.prerequisite && !this.hasPrerequisite(def.prerequisite, TEAM.PLAYER)) {
             this.addMessage(`Requires ${BUILDINGS[def.prerequisite].name}!`, 'warning');
             this.audio.play('error');
             return;
         }
-
         this.placingBuilding = type;
     }
 
     trainUnit(type, producer) {
         const def = UNITS[type];
-        if (!def) return;
-
+        if (!def || !producer || producer.dead || producer.team !== TEAM.PLAYER) return;
+        if (producer.beingBuilt || producer.buildProgress < 100) return;
         if (this.playerCredits < def.cost) {
             this.addMessage('Not enough credits!', 'warning');
             this.audio.play('error');
             return;
         }
-
-        if (!producer || producer.dead || producer.team !== TEAM.PLAYER) return;
-        if (producer.beingBuilt || producer.buildProgress < 100) return;
-
         this.playerCredits -= def.cost;
         producer.productionQueue.push(type);
-        this.audio.play('click');
     }
 
     sellBuilding(entity) {
         if (!entity || entity.dead || entity.team !== TEAM.PLAYER || !entity.isBuilding) return;
-        if (entity.type === 'construction_yard') return; // Can't sell CY
-
+        if (entity.type === 'construction_yard') return;
         const refund = Math.floor(entity.cost * 0.5);
         this.playerCredits += refund;
         this.killEntity(entity);
         this.addMessage(`Sold for $${refund}`, '');
-        this.selectedEntities = this.selectedEntities.filter(e => e !== entity);
     }
 
     addMessage(text, type = '') {
         this.messages.push({ text, type, time: Date.now() });
         if (this.messages.length > 5) this.messages.shift();
-        this.audio.play('message');
     }
 
     resize() {
         if (!this.canvas) return;
-        const sidebar = 256;
-        this.canvas.width = window.innerWidth - sidebar;
+        this.canvas.width = window.innerWidth - 256;
         this.canvas.height = window.innerHeight;
-
-        // Update minimap
         if (this.minimapCanvas) {
             this.minimapCanvas.width = 234;
             this.minimapCanvas.height = Math.floor(234 * (this.mapH / this.mapW));
         }
     }
 
-    // ===== KEYBOARD =====
     handleKeyDown(key) {
         this.keys[key.code] = true;
-
-        // Control groups
         if (key.ctrlKey && key.code >= 'Digit1' && key.code <= 'Digit9') {
-            const groupNum = parseInt(key.code.replace('Digit', ''));
-            if (this.selectedEntities.length > 0) {
-                this.unitGroups[groupNum] = [...this.selectedEntities];
-                this.addMessage(`Group ${groupNum} set`, '');
-            }
+            const n = parseInt(key.code.replace('Digit', ''));
+            if (this.selectedEntities.length > 0) this.unitGroups[n] = [...this.selectedEntities];
         }
-
         if (!key.ctrlKey && key.code >= 'Digit1' && key.code <= 'Digit9') {
-            const groupNum = parseInt(key.code.replace('Digit', ''));
-            if (this.unitGroups[groupNum]) {
+            const n = parseInt(key.code.replace('Digit', ''));
+            if (this.unitGroups[n]) {
                 for (const e of this.selectedEntities) e.selected = false;
-                this.selectedEntities = this.unitGroups[groupNum].filter(e => !e.dead);
+                this.selectedEntities = this.unitGroups[n].filter(e => !e.dead);
                 for (const e of this.selectedEntities) e.selected = true;
             }
         }
-
         if (key.code === 'Delete') {
-            for (const e of this.selectedEntities) {
-                this.sellBuilding(e);
-            }
+            for (const e of this.selectedEntities) this.sellBuilding(e);
         }
-
-        if (key.code === 'Space') {
-            if (this.selectedEntities.length > 0) {
-                const sel = this.selectedEntities[0];
-                this.targetCamera.x = sel.x - (this.canvas.width / 2);
-                this.targetCamera.y = sel.y - (this.canvas.height / 2);
-            }
+        if (key.code === 'Space' && this.selectedEntities.length > 0) {
+            const sel = this.selectedEntities[0];
+            this.targetCamera.x = sel.x - this.canvas.width / 2;
+            this.targetCamera.y = sel.y - this.canvas.height / 2;
         }
-
         if (key.code === 'Escape') {
             this.placingBuilding = null;
             for (const e of this.selectedEntities) e.selected = false;
