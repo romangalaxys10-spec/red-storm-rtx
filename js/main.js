@@ -1,7 +1,7 @@
-import { Game } from './engine.js';
-import { renderGame, updateUI } from './renderer.js';
-import { LEVELS } from './levels.js';
-import { TILE_SIZE } from './utils.js';
+import { Game } from './engine.js?v=3';
+import { renderGame, updateUI } from './renderer.js?v=3';
+import { LEVELS } from './levels.js?v=3';
+import { TILE_SIZE } from './utils.js?v=3';
 
 const game = new Game();
 
