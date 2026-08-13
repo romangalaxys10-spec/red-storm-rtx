@@ -178,7 +178,7 @@ export class Game {
         this.placingBuilding = null;
         this.placementValid = false;
 
-        this.mouse = { x: 0, y: 0, worldX: 0, worldY: 0, dragging: false, dragStartX: 0, dragStartY: 0 };
+        this.mouse = { x: 0, y: 0, worldX: 0, worldY: 0, down: false, dragging: false, dragStartX: 0, dragStartY: 0 };
         this.keys = {};
         this.unitGroups = {};
 
@@ -1229,6 +1229,7 @@ export class Game {
     handleMouseDown(x, y, button) {
         this.audio.resume();
         if (button === 0) {
+            this.mouse.down = true;
             this.mouse.dragging = false;
             this.mouse.dragStartX = x;
             this.mouse.dragStartY = y;
@@ -1264,6 +1265,8 @@ export class Game {
         } else if (button === 2) {
             this.rightClick(worldX, worldY);
         }
+        this.mouse.down = false;
+        this.mouse.dragging = false;
         this.audio.play('click');
     }
 
@@ -1272,7 +1275,9 @@ export class Game {
         this.mouse.y = y;
         this.mouse.worldX = x + this.camera.x;
         this.mouse.worldY = y + this.camera.y;
-        this.mouse.dragging = Math.abs(x - this.mouse.dragStartX) > 10 || Math.abs(y - this.mouse.dragStartY) > 10;
+        // Only show a drag-box while a button is actually held
+        this.mouse.dragging = this.mouse.down &&
+            (Math.abs(x - this.mouse.dragStartX) > 10 || Math.abs(y - this.mouse.dragStartY) > 10);
     }
 
     clickSelect(worldX, worldY) {

@@ -1,8 +1,8 @@
-import { Game } from './engine.js?v=5';
-import { renderGame, updateUI } from './renderer.js?v=5';
-import { LEVELS } from './levels.js?v=5';
-import { TILE_SIZE } from './utils.js?v=5';
-import { Textures } from './shaders.js?v=5';
+import { Game } from './engine.js?v=6';
+import { renderGame, updateUI } from './renderer.js?v=6';
+import { LEVELS } from './levels.js?v=6';
+import { TILE_SIZE } from './utils.js?v=6';
+import { Textures } from './shaders.js?v=6';
 
 const game = new Game();
 

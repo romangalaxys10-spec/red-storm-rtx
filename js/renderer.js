@@ -2,7 +2,8 @@ import {
     TILE_SIZE, T, TEAM, BUILDINGS, UNITS, TILE_COLORS, TILE_WALKABLE,
     SIDEBAR_WIDTH, TOP_HUD_HEIGHT
 } from './utils.js';
-import { fresnelRim, pointLight, hologram, starryVFX, drawSkybox, Textures } from './shaders.js?v=5';
+import { fresnelRim, pointLight, hologram, starryVFX, drawSkybox, Textures } from './shaders.js?v=6';
+import { drawBuilding, drawUnit } from './sprites.js?v=6';
 
 const TEAM_COLORS = {
     [TEAM.PLAYER]: { primary: '#2266cc', secondary: '#3388ff', light: '#5599ff', dark: '#1144aa', minimap: '#4488ff' },
@@ -174,24 +175,7 @@ function renderBuildings(ctx, game, startX, startY, endX, endY) {
             ctx.fillStyle = entity.team === TEAM.PLAYER ? '#4488ff' : '#ff4444';
             ctx.fillRect(px, py + h - 4, w * progress, 4);
         } else {
-            // Normal building
-            ctx.fillStyle = colors.dark;
-            ctx.fillRect(px, py, w, h);
-
-            // Building detail
-            ctx.fillStyle = colors.primary;
-            ctx.fillRect(px + 3, py + 3, w - 6, h - 6);
-
-            // Inner detail
-            ctx.fillStyle = colors.secondary;
-            ctx.fillRect(px + 6, py + 6, w - 12, h - 12);
-
-            // Building icon
-            ctx.font = `${Math.min(w, h) * 0.4}px serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillStyle = '#fff';
-            ctx.fillText(BUILDINGS[entity.type]?.icon || '?', px + w/2, py + h/2);
+            drawBuilding(ctx, entity, colors, game);
 
             // RA3 shader port: Fresnel rim glow + point-light bloom on building
             fresnelRim(ctx, px + w/2, py + h/2, Math.max(w, h) / 2 * 1.08,
@@ -253,92 +237,18 @@ function renderUnits(ctx, game) {
         const y = entity.y;
         const size = TILE_SIZE * entity.size * 0.4;
 
-        // Shadow
-        ctx.fillStyle = 'rgba(0,0,0,0.3)';
-        ctx.beginPath();
-        ctx.ellipse(x, y + size * 0.7, size * 0.8, size * 0.3, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Unit body
-        const shape = UNIT_SHAPES[entity.type] || 'circle';
-        ctx.fillStyle = colors.primary;
-        ctx.strokeStyle = colors.dark;
-        ctx.lineWidth = 1.5;
-
         ctx.save();
         ctx.translate(x, y);
-
-        if (entity.isAir) {
-            // Flying units bob
-            ctx.translate(0, Math.sin(game.gameTime * 4) * 2);
-        }
-
-        switch (shape) {
-            case 'circle':
-                ctx.beginPath();
-                ctx.arc(0, 0, size, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-                break;
-            case 'diamond':
-                ctx.beginPath();
-                ctx.moveTo(0, -size);
-                ctx.lineTo(size, 0);
-                ctx.lineTo(0, size);
-                ctx.lineTo(-size, 0);
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-                break;
-            case 'triangle':
-                ctx.beginPath();
-                ctx.moveTo(0, -size);
-                ctx.lineTo(size, size);
-                ctx.lineTo(-size, size);
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-                break;
-            case 'rect':
-                ctx.rotate(entity.facing);
-                ctx.fillRect(-size * 1.2, -size * 0.8, size * 2.4, size * 1.6);
-                ctx.strokeRect(-size * 1.2, -size * 0.8, size * 2.4, size * 1.6);
-
-                // Turret barrel for tanks
-                if (entity.canAttack && entity.attackDamage > 15) {
-                    ctx.fillStyle = colors.secondary;
-                    ctx.fillRect(size * 0.5, -2, size * 0.8, 4);
-                }
-                break;
-        }
-
-        // Unit icon (small)
-        if (entity.isHarvester) {
-            ctx.rotate(-entity.facing); // Reset rotation for harvester
-            ctx.font = `${size}px serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillStyle = '#ffcc00';
-            ctx.fillText('⛏', 0, 0);
-        } else if (entity.type === 'helicopter') {
-            ctx.font = `${size * 1.2}px serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('🚁', 0, -size * 0.5);
-        }
-
-        // RA3 shader port: Fresnel rim glow on unit (drawn in translated ctx at 0,0)
-        fresnelRim(ctx, 0, 0, size * 1.45,
+        if (entity.isAir) ctx.translate(0, Math.sin(game.gameTime * 4) * 2);
+        drawUnit(ctx, entity, colors, game);
+        fresnelRim(ctx, 0, 0, size * 1.5,
             entity.team === TEAM.PLAYER ? '#4488ff' : '#ff4444', { intensity: 0.9 });
-
-        // RA3 shader port: starry "materialize" VFX on spawn
         if (game.gameTime - (entity.spawnTime || 0) < 0.8) {
             starryVFX(ctx, 0, 0, size * 3.2, game.gameTime * 1000, game.gameTime * 2);
         }
-
         ctx.restore();
 
-        // Harvester ore indicator
+                // Harvester ore indicator
         if (entity.isHarvester && entity.ore > 0) {
             const orePercent = entity.ore / entity.oreCapacity;
             ctx.fillStyle = '#333';
