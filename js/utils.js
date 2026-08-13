@@ -329,7 +329,9 @@ export function findPath(map, startX, startY, endX, endY, teamEntities = [], map
 
 // ===== MAP GENERATION =====
 export function generateMap(level) {
-    const { width, height, seed } = level;
+    const width = level.mapSize ? level.mapSize.w : level.width;
+    const height = level.mapSize ? level.mapSize.h : level.height;
+    const seed = level.seed;
     const map = [];
 
     // Simple seeded random
