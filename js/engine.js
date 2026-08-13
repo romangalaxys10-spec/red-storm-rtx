@@ -44,6 +44,9 @@ export class Entity {
         this.canCapture = (def && def.canCapture) || false;
         this.canTransport = (def && def.canTransport) || false;
         this.isInvisible = (def && def.isInvisible) || false;
+        this.isMedic = (def && def.isMedic) || false;
+        this.healAmount = (def && def.healAmount) || 0;
+        this.healRange = (def && def.healRange) || 0;
         this.producedAt = (def && def.producedAt) || null;
         this.prerequisite = (def && def.prerequisite) || null;
 
@@ -64,6 +67,9 @@ export class Entity {
             this.provides = bDef.provides || null;
             this.buildTime = bDef.buildTime;
             this.spawnsUnit = bDef.spawnsUnit || null;
+            this.superweapon = bDef.superweapon || null;
+            this.charge = 0;
+            this.chargeTime = bDef.chargeTime || 60;
         }
 
         this.ore = 0;
@@ -100,6 +106,8 @@ export class Entity {
 
         this.animFrame = 0;
         this.facing = 0;
+        this.invulnerableUntil = 0;
+        this.healCooldown = 0;
     }
 
     get hpPercent() { return this.maxHp > 0 ? this.hp / this.maxHp : 0; }
@@ -156,6 +164,11 @@ export class Game {
         this.camera = { x: 0, y: 0 };
         this.targetCamera = { x: 0, y: 0 };
 
+        this.upgrades = { armor: false, damage: false, speed: false };
+        this.activeStorms = [];
+        this.superweaponPending = null;
+        this.lightningTimer = 0;
+
         this.gameTime = 0;
         this.tickCount = 0;
         this.lastTime = 0;
@@ -180,6 +193,12 @@ export class Game {
         this.defeat = false;
         this.warmupFrames = 120;
         this.levelStartTime = 0;
+
+        // RA3/Generals-style progression
+        this.upgrades = { armor: false, damage: false, speed: false };
+        this.activeStorms = [];      // weather-control lightning storms
+        this.superweaponPending = null; // { type } awaiting target click
+        this.lightningTimer = 0;
 
         this.fogMap = [];
 
@@ -326,6 +345,12 @@ export class Game {
         entity.x = tileX * TILE_SIZE + TILE_SIZE / 2;
         entity.y = tileY * TILE_SIZE + TILE_SIZE / 2;
         entity.spawnTime = this.gameTime;
+        // Apply purchased upgrades to player units
+        if (team === TEAM.PLAYER && entity.isUnit) {
+            if (this.upgrades.armor) { entity.maxHp = Math.round(entity.maxHp * 1.25); entity.hp = entity.maxHp; }
+            if (this.upgrades.damage) { entity.attackDamage = Math.round(entity.attackDamage * 1.25); }
+            if (this.upgrades.speed) { entity.speed *= 1.2; }
+        }
         this.entities.push(entity);
         return entity;
     }
@@ -383,6 +408,9 @@ export class Game {
         this.updateFogOfWar();
         this.updatePower();
         this.updateAI(timestamp);
+        this.updateSuperweapons();
+        this.updateMedics();
+        this.updateStorms();
 
         // CRITICAL: Only check victory after BOTH warmup frames AND minimum time
         if (this.warmupFrames > 0) {
@@ -644,6 +672,7 @@ export class Game {
     }
 
     dealDamage(entity, damage) {
+        if (entity.invulnerableUntil && this.gameTime < entity.invulnerableUntil) return;
         const armor = entity.armor || 0;
         entity.hp -= Math.max(1, damage - armor * 0.5);
         if (entity.hp <= 0) this.killEntity(entity);
@@ -856,8 +885,132 @@ export class Game {
             if (entity.team === TEAM.PLAYER) { entity.visible = true; continue; }
             const tx = Math.floor(entity.x / TILE_SIZE);
             const ty = Math.floor(entity.y / TILE_SIZE);
-            entity.visible = (this.fogMap[ty]?.[tx] || 0) >= 2;
+            let vis = (this.fogMap[ty]?.[tx] || 0) >= 2;
+            // Stealth units (Spy) only revealed when a player unit/building is adjacent
+            if (entity.isInvisible && !vis) {
+                for (const p of this.entities) {
+                    if (p.dead || p.team !== TEAM.PLAYER) continue;
+                    if (manhattanDist(p.x, p.y, entity.x, entity.y) < TILE_SIZE * 3.5) { vis = true; break; }
+                }
+            }
+            entity.visible = vis;
         }
+    }
+
+
+
+    // ===== SUPERWEAPONS (RA3/Generals-style) =====
+    updateSuperweapons() {
+        for (const b of this.entities) {
+            if (b.dead || !b.isBuilding || !b.superweapon || b.buildProgress < 100) continue;
+            if (b.charge < 1) b.charge = Math.min(1, b.charge + this.dt / b.chargeTime);
+            // Enemy AI auto-fires when ready
+            if (b.team === TEAM.ENEMY && b.charge >= 1 && !this.superweaponPending) {
+                this.aiFireSuperweapon(b);
+            }
+        }
+    }
+
+    aiFireSuperweapon(building) {
+        // Target the player's most valuable structure or a cluster of units
+        const targets = this.entities.filter(e => e.team === TEAM.PLAYER && !e.dead && (e.isBuilding || e.isUnit));
+        if (targets.length === 0) return;
+        // Prefer construction yard / base
+        const cy = targets.find(e => e.provides === 'builder') || targets[Math.floor(Math.random() * targets.length)];
+        this.log(`AI fires superweapon ${building.superweapon} at player`);
+        this.fireSuperweapon(building.superweapon, cy.x, cy.y, TEAM.ENEMY);
+    }
+
+    fireSuperweapon(type, x, y, team) {
+        this.log(`Superweapon ${type} fired at (${Math.floor(x / TILE_SIZE)},${Math.floor(y / TILE_SIZE)}) by team ${team}`);
+        if (type === 'nuke') {
+            this.explosions.push({ x, y, radius: TILE_SIZE * 9, timer: 45 });
+            this.audio.play('explosion');
+            for (const e of this.entities) {
+                if (e.dead || e.team === team) continue;
+                const d = dist(e.x, e.y, x, y);
+                if (d < TILE_SIZE * 9) this.dealDamage(e, 400 * (1 - d / (TILE_SIZE * 9)));
+            }
+        } else if (type === 'iron') {
+            for (const e of this.entities) {
+                if (e.dead || e.team !== team) continue;
+                if (dist(e.x, e.y, x, y) < TILE_SIZE * 4) e.invulnerableUntil = this.gameTime + 20;
+            }
+            this.explosions.push({ x, y, radius: TILE_SIZE * 4, timer: 30 });
+            this.audio.play('build');
+        } else if (type === 'chrono') {
+            const movers = this.entities.filter(e =>
+                !e.dead && e.isUnit && e.team === team &&
+                (team === TEAM.PLAYER ? this.selectedEntities.includes(e) : true));
+            for (const u of movers) {
+                u.x = x + randFloat(-TILE_SIZE, TILE_SIZE);
+                u.y = y + randFloat(-TILE_SIZE, TILE_SIZE);
+                u.tileX = Math.floor(u.x / TILE_SIZE);
+                u.tileY = Math.floor(u.y / TILE_SIZE);
+            }
+            this.explosions.push({ x, y, radius: TILE_SIZE * 3, timer: 20 });
+        } else if (type === 'weather') {
+            this.activeStorms.push({ x, y, timer: 15 * 60, last: 0, team });
+            this.audio.play('explosion');
+        }
+        for (const b of this.entities) {
+            if (b.superweapon === type && b.team === team) b.charge = 0;
+        }
+        this.superweaponPending = null;
+    }
+
+    // ===== MEDICS (heal nearby friendly infantry) =====
+    updateMedics() {
+        for (const m of this.entities) {
+            if (m.dead || !m.isMedic || m.team !== TEAM.PLAYER) continue;
+            m.healCooldown -= this.dt;
+            if (m.healCooldown > 0) continue;
+            for (const t of this.entities) {
+                if (t.dead || t.team !== m.team || !t.isUnit || t.isMedic || t.hp >= t.maxHp) continue;
+                if (dist(m.x, m.y, t.x, t.y) < TILE_SIZE * m.healRange) {
+                    t.hp = Math.min(t.maxHp, t.hp + m.healAmount);
+                }
+            }
+            m.healCooldown = 0.5;
+        }
+    }
+
+    // ===== WEATHER STORMS (lightning) =====
+    updateStorms() {
+        for (const storm of this.activeStorms) {
+            storm.timer--;
+            storm.last -= this.dt;
+            if (storm.last <= 0) {
+                storm.last = randFloat(0.3, 0.8);
+                const lx = storm.x + randFloat(-TILE_SIZE * 4, TILE_SIZE * 4);
+                const ly = storm.y + randFloat(-TILE_SIZE * 4, TILE_SIZE * 4);
+                this.explosions.push({ x: lx, y: ly, radius: TILE_SIZE * 2, timer: 12 });
+                this.audio.play('explosion');
+                for (const e of this.entities) {
+                    if (e.dead || e.team === storm.team) continue;
+                    if (dist(e.x, e.y, lx, ly) < TILE_SIZE * 2) this.dealDamage(e, 80);
+                }
+            }
+        }
+        this.activeStorms = this.activeStorms.filter(s => s.timer > 0);
+    }
+
+    // ===== UPGRADES =====
+    purchaseUpgrade(type) {
+        if (this.upgrades[type]) { this.addMessage('Already researched!', 'warning'); return false; }
+        const cost = 1500;
+        if (this.playerCredits < cost) { this.addMessage('Not enough credits!', 'warning'); this.audio.play('error'); return false; }
+        this.playerCredits -= cost;
+        this.upgrades[type] = true;
+        for (const e of this.entities) {
+            if (e.dead || e.team !== TEAM.PLAYER || !e.isUnit) continue;
+            if (type === 'armor') { e.maxHp = Math.round(e.maxHp * 1.25); e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.25); }
+            if (type === 'damage') e.attackDamage = Math.round(e.attackDamage * 1.25);
+            if (type === 'speed') e.speed *= 1.2;
+        }
+        this.addMessage(`Researched: ${type.toUpperCase()}!`, 'success');
+        this.audio.play('build');
+        return true;
     }
 
     checkVictoryDefeat() {
@@ -966,7 +1119,9 @@ export class Game {
         if (!cy || cy.productionItem) return;
 
         const priority = ['power_plant', 'ore_refinery', 'barracks', 'war_factory',
-                          'turret', 'pillbox', 'advanced_power', 'radar_dome', 'tech_center'];
+                          'turret', 'pillbox', 'advanced_power', 'radar_dome', 'tech_center',
+                          'airfield', 'tesla_coil', 'nuclear_silo', 'iron_curtain',
+                          'chronosphere', 'weather_control', 'wall'];
 
         for (const type of priority) {
             if (Math.random() > diff) continue;
@@ -1017,7 +1172,7 @@ export class Game {
             if (building.productionQueue.length >= 3) continue;
 
             if (building.type === 'barracks') {
-                const types = ['infantry', 'rocket_soldier', 'grenadier'];
+                const types = ['infantry', 'rocket_soldier', 'grenadier', 'medic', 'commando'];
                 const type = types[Math.floor(Math.random() * types.length)];
                 const def = UNITS[type];
                 if (def && this.enemyCredits >= def.cost) {
@@ -1025,10 +1180,17 @@ export class Game {
                     building.productionQueue.push(type);
                 }
             } else if (building.type === 'war_factory') {
-                let types = ['light_tank', 'heavy_tank'];
+                let types = ['light_tank', 'heavy_tank', 'tesla_tank', 'flak_truck', 'ifv'];
                 if (Math.random() < 0.2) types.push('artillery');
-                if (!this.entities.some(e => e.type === 'harvester' && e.team === TEAM.ENEMY && !e.dead)) types.push('harvester');
+                if (!this.entities.some(ent => ent.type === 'harvester' && ent.team === TEAM.ENEMY && !ent.dead)) types.push('harvester');
                 const type = types[Math.floor(Math.random() * types.length)];
+                const def = UNITS[type];
+                if (def && this.enemyCredits >= def.cost) {
+                    this.enemyCredits -= def.cost;
+                    building.productionQueue.push(type);
+                }
+            } else if (building.type === 'airfield') {
+                const type = 'helicopter';
                 const def = UNITS[type];
                 if (def && this.enemyCredits >= def.cost) {
                     this.enemyCredits -= def.cost;
@@ -1076,6 +1238,17 @@ export class Game {
     handleMouseUp(x, y, button) {
         const worldX = x + this.camera.x;
         const worldY = y + this.camera.y;
+
+        // Superweapon targeting mode: next left-click fires the pending superweapon
+        if (button === 0 && this.superweaponPending && !this.mouse.dragging) {
+            const b = this.entities.find(ent => ent.superweapon === this.superweaponPending && ent.team === TEAM.PLAYER && ent.charge >= 1);
+            if (b) {
+                this.fireSuperweapon(this.superweaponPending, worldX, worldY, TEAM.PLAYER);
+                this.addMessage('Superweapon launched!', 'success');
+            }
+            this.superweaponPending = null;
+            return;
+        }
 
         if (button === 0) {
             const dx = Math.abs(x - this.mouse.dragStartX);

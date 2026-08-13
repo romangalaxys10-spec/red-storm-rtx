@@ -2,7 +2,7 @@ import {
     TILE_SIZE, T, TEAM, BUILDINGS, UNITS, TILE_COLORS, TILE_WALKABLE,
     SIDEBAR_WIDTH, TOP_HUD_HEIGHT
 } from './utils.js';
-import { fresnelRim, pointLight, hologram, starryVFX, drawSkybox, Textures } from './shaders.js?v=4';
+import { fresnelRim, pointLight, hologram, starryVFX, drawSkybox, Textures } from './shaders.js?v=5';
 
 const TEAM_COLORS = {
     [TEAM.PLAYER]: { primary: '#2266cc', secondary: '#3388ff', light: '#5599ff', dark: '#1144aa', minimap: '#4488ff' },
@@ -649,6 +649,19 @@ function updateSelectionPanel(game) {
                 html += `</div><div style="margin-top:0.5rem;font-size:0.75rem;">
                     Queue: ${entity.productionQueue.length} items`;
             }
+        }
+
+        // Upgrades (Tech Center) — RA3/Generals-style research
+        if (entity.type === 'tech_center' && entity.team === TEAM.PLAYER) {
+            html += '</div><div style="margin-top:0.6rem;">' +
+                '<div style="font-size:0.75rem;color:#aaa;margin-bottom:0.3rem;letter-spacing:0.1em;">RESEARCH</div>';
+            const ups = [['armor', '🛡️ Armor +25%'], ['damage', '⚔️ Damage +25%'], ['speed', '⚡ Speed +20%']];
+            for (const up of ups) {
+                const done = game.upgrades[up[0]];
+                html += '<button class="upgrade-btn' + (done ? ' done' : '') + '" data-upgrade="' + up[0] + '"' +
+                    (done ? ' disabled' : '') + '>' + up[1] + ' ($1500)</button>';
+            }
+            html += '</div>';
         }
 
         html += '</div>';

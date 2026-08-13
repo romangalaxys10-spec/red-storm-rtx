@@ -104,7 +104,48 @@ export const BUILDINGS = {
     tech_center: {
         name: 'Tech Center', icon: '🔬', cost: 2500, hp: 600,
         size: { w: 2, h: 2 }, power: -50, provides: 'advanced',
-        buildTime: 15, prerequisite: 'radar_dome', desc: 'Enables advanced units',
+        buildTime: 15, prerequisite: 'radar_dome', desc: 'Enables advanced units + upgrades',
+    },
+    nuclear_silo: {
+        name: 'Nuclear Silo', icon: '☢️', cost: 2000, hp: 500,
+        size: { w: 2, h: 2 }, power: -50, provides: 'super_nuke',
+        buildTime: 12, prerequisite: 'tech_center', superweapon: 'nuke', chargeTime: 60,
+        desc: 'Charges a nuclear missile. Devastating AoE.',
+    },
+    chronosphere: {
+        name: 'Chronosphere', icon: '⏳', cost: 2500, hp: 500,
+        size: { w: 2, h: 2 }, power: -50, provides: 'super_chrono',
+        buildTime: 12, prerequisite: 'tech_center', superweapon: 'chrono', chargeTime: 45,
+        desc: 'Teleports your units to a target location.',
+    },
+    iron_curtain: {
+        name: 'Iron Curtain', icon: '🛡️', cost: 2500, hp: 500,
+        size: { w: 2, h: 2 }, power: -50, provides: 'super_iron',
+        buildTime: 12, prerequisite: 'tech_center', superweapon: 'iron', chargeTime: 50,
+        desc: 'Makes units/buildings invulnerable temporarily.',
+    },
+    weather_control: {
+        name: 'Weather Control', icon: '🌩️', cost: 3000, hp: 500,
+        size: { w: 2, h: 2 }, power: -60, provides: 'super_weather',
+        buildTime: 14, prerequisite: 'tech_center', superweapon: 'weather', chargeTime: 70,
+        desc: 'Calls a lightning storm on the enemy.',
+    },
+    airfield: {
+        name: 'Airfield', icon: '🛬', cost: 1500, hp: 600,
+        size: { w: 3, h: 2 }, power: -30, provides: 'air_builder',
+        buildTime: 10, prerequisite: 'war_factory', desc: 'Builds aircraft (helis).',
+    },
+    wall: {
+        name: 'Wall', icon: '🧱', cost: 50, hp: 200,
+        size: { w: 1, h: 1 }, power: 0, provides: 'wall',
+        buildTime: 1, prerequisite: null, desc: 'Blocks enemy movement (destructible).',
+    },
+    tesla_coil: {
+        name: 'Tesla Coil', icon: '⚡', cost: 1000, hp: 500,
+        size: { w: 1, h: 1 }, power: -25, provides: 'defense',
+        buildTime: 7, prerequisite: 'tech_center', attackDamage: 60,
+        attackRange: 6, attackSpeed: 0.6, splash: 1, antiArmor: true,
+        desc: 'Powerful chain-lightning defense.',
     },
 };
 
@@ -190,7 +231,42 @@ export const UNITS = {
         speed: 2.5, attackDamage: 0, attackRange: 0, attackSpeed: 0,
         armor: 0, size: 0.6, canAttack: false, isInvisible: true,
         producedAt: 'barracks', buildTime: 4, prerequisite: 'tech_center',
-        desc: 'Infiltrates enemy base',
+        desc: 'Infiltrates enemy base (stealth)',
+    },
+    tesla_tank: {
+        name: 'Tesla Tank', icon: '🔌', cost: 1200, hp: 250,
+        speed: 2.5, attackDamage: 45, attackRange: 5, attackSpeed: 0.9,
+        armor: 8, size: 0.9, canAttack: true, antiArmor: true, splash: 1,
+        producedAt: 'war_factory', buildTime: 9, prerequisite: 'tech_center',
+        desc: 'Electric anti-armor tank.',
+    },
+    medic: {
+        name: 'Medic', icon: '⚕️', cost: 300, hp: 40,
+        speed: 2, attackDamage: 0, attackRange: 0, attackSpeed: 0,
+        armor: 1, size: 0.6, canAttack: false, isMedic: true, healAmount: 4, healRange: 4,
+        producedAt: 'barracks', buildTime: 3, prerequisite: 'barracks',
+        desc: 'Heals nearby friendly infantry.',
+    },
+    commando: {
+        name: 'Commando', icon: '💂', cost: 1500, hp: 150,
+        speed: 2.2, attackDamage: 60, attackRange: 4, attackSpeed: 1.0,
+        armor: 3, size: 0.6, canAttack: true, antiArmor: true,
+        producedAt: 'barracks', buildTime: 8, prerequisite: 'tech_center',
+        desc: 'Elite hero unit. High damage.',
+    },
+    ifv: {
+        name: 'IFV', icon: '🚙', cost: 700, hp: 200,
+        speed: 4, attackDamage: 15, attackRange: 4, attackSpeed: 1.5,
+        armor: 5, size: 0.9, canAttack: true, canTransport: true, transportCapacity: 1,
+        producedAt: 'war_factory', buildTime: 6, prerequisite: 'barracks',
+        desc: 'Fast transport, carries 1 infantry.',
+    },
+    flak_truck: {
+        name: 'Flak Truck', icon: '🚛', cost: 800, hp: 220,
+        speed: 3, attackDamage: 30, attackRange: 6, attackSpeed: 1.0,
+        armor: 4, size: 0.9, canAttack: true, antiAir: true,
+        producedAt: 'war_factory', buildTime: 7, prerequisite: 'war_factory',
+        desc: 'Mobile anti-air.',
     },
 };
 

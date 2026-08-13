@@ -605,3 +605,51 @@ kbd {
     70%  { opacity: 1; }
     100% { opacity: 0; transform: scale(1.0); }
 }
+
+/* ===== SUPERWEAPON BAR (RA3/Generals-style) ===== */
+#superweapon-bar {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 0.6rem;
+    z-index: 15;
+}
+.sw-btn {
+    background: rgba(10,12,20,0.85);
+    border: 1px solid var(--panel-border, #444);
+    border-radius: 6px;
+    padding: 0.35rem 0.6rem;
+    min-width: 110px;
+    cursor: pointer;
+    color: #ccc;
+    text-align: center;
+    transition: all 0.15s;
+    position: relative;
+}
+.sw-btn:hover { border-color: #888; }
+.sw-btn.disabled { opacity: 0.45; cursor: not-allowed; }
+.sw-btn.armed { border-color: #ffcc33; box-shadow: 0 0 12px rgba(255,204,51,0.7); }
+.sw-icon { font-size: 1.1rem; }
+.sw-label { display: block; font-size: 0.7rem; letter-spacing: 0.05em; margin: 0.1rem 0; }
+.sw-charge { height: 4px; background: #222; border-radius: 2px; overflow: hidden; margin: 0.15rem 0; }
+.sw-charge-fill { height: 100%; background: linear-gradient(90deg, #ffcc33, #ff6622); transition: width 0.2s; }
+.sw-status { font-size: 0.6rem; color: #ffcc33; letter-spacing: 0.05em; }
+.sw-btn.disabled .sw-status { color: #888; }
+
+/* ===== UPGRADE BUTTONS (Tech Center) ===== */
+.upgrade-btn {
+    display: block;
+    width: 100%;
+    margin-top: 0.3rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--panel-border, #444);
+    color: #ddd;
+    padding: 0.35rem;
+    font-size: 0.7rem;
+    border-radius: 4px;
+    cursor: pointer;
+}
+.upgrade-btn:hover:not(:disabled) { background: rgba(255,255,255,0.12); border-color: #888; }
+.upgrade-btn.done { background: rgba(60,160,60,0.25); color: #7fdc7f; border-color: #3a9a3a; cursor: default; }

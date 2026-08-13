@@ -1,8 +1,8 @@
-import { Game } from './engine.js?v=4';
-import { renderGame, updateUI } from './renderer.js?v=4';
-import { LEVELS } from './levels.js?v=4';
-import { TILE_SIZE } from './utils.js?v=4';
-import { Textures } from './shaders.js?v=4';
+import { Game } from './engine.js?v=5';
+import { renderGame, updateUI } from './renderer.js?v=5';
+import { LEVELS } from './levels.js?v=5';
+import { TILE_SIZE } from './utils.js?v=5';
+import { Textures } from './shaders.js?v=5';
 
 const game = new Game();
 
@@ -194,6 +194,51 @@ function setupGameListeners() {
     });
 
     window.addEventListener('resize', () => game.resize());
+
+    // Delegate superweapon bar clicks
+    document.getElementById('superweapon-bar')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.sw-btn');
+        if (!btn || btn.classList.contains('disabled')) return;
+        const type = btn.dataset.type;
+        if (game.superweaponPending === type) { game.superweaponPending = null; return; }
+        game.superweaponPending = type;
+        game.addMessage('Select target for ' + btn.dataset.name + '...', 'info');
+    });
+
+    // Delegate upgrade button clicks (Tech Center research)
+    document.getElementById('selection-panel')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-upgrade]');
+        if (!btn || btn.disabled) return;
+        game.purchaseUpgrade(btn.dataset.upgrade);
+    });
+}
+
+// RA3/Generals-style superweapon bar
+function updateSuperweaponBar(g) {
+    const bar = document.getElementById('superweapon-bar');
+    if (!bar) return;
+    const types = ['nuclear_silo', 'chronosphere', 'iron_curtain', 'weather_control'];
+    let html = '';
+    let any = false;
+    for (const t of types) {
+        const b = g.entities.find(e => e.superweapon === t && e.team === TEAM.PLAYER && !e.dead);
+        if (!b) continue;
+        any = true;
+        const ready = b.charge >= 1;
+        const pct = Math.floor(b.charge * 100);
+        const armed = g.superweaponPending === t;
+        const name = BUILDINGS[t].name;
+        const icon = BUILDINGS[t].icon;
+        html += `<div class="sw-btn ${ready ? '' : 'disabled'} ${armed ? 'armed' : ''}" data-type="${t}" data-name="${name}">
+            <span class="sw-icon">${icon}</span>
+            <span class="sw-label">${name}</span>
+            <div class="sw-charge"><div class="sw-charge-fill" style="width:${pct}%"></div></div>
+            <span class="sw-status">${ready ? (armed ? '🎯 TARGET' : 'READY') : pct + '%'}</span>
+        </div>`;
+    }
+    if (!any) { bar.innerHTML = ''; bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    bar.innerHTML = html;
 }
 
 function setupLevelSelect() {
@@ -296,6 +341,7 @@ function gameLoop(timestamp) {
 
         if (timestamp - lastUIUpdate > 200) {
             updateUI(game);
+            updateSuperweaponBar(game);
             lastUIUpdate = timestamp;
         }
     }
