@@ -1347,3 +1347,107 @@ export class Game {
         this.keys[key.code] = false;
     }
 }
+
+        const cy = this.entities.find(e =>
+            e.type === 'construction_yard' && e.team === TEAM.PLAYER && !e.dead && !e.beingBuilt
+        );
+        if (!cy) {
+            this.addMessage('No Construction Yard!', 'warning');
+            return;
+        }
+
+        this.playerCredits -= def.cost;
+        const building = this.spawnBuilding(type, tx, ty, TEAM.PLAYER);
+        building.beingBuilt = true;
+        building.buildProgress = 0;
+        building.hp = 1;
+        this.placingBuilding = null;
+        this.addMessage(`Building ${def.name}...`, '');
+    }
+
+    startPlacingBuilding(type) {
+        const def = BUILDINGS[type];
+        if (!def) return;
+        if (this.playerCredits < def.cost) {
+            this.addMessage('Not enough credits!', 'warning');
+            this.audio.play('error');
+            return;
+        }
+        if (def.prerequisite && !this.hasPrerequisite(def.prerequisite, TEAM.PLAYER)) {
+            this.addMessage(`Requires ${BUILDINGS[def.prerequisite].name}!`, 'warning');
+            this.audio.play('error');
+            return;
+        }
+        this.placingBuilding = type;
+    }
+
+    trainUnit(type, producer) {
+        const def = UNITS[type];
+        if (!def || !producer || producer.dead || producer.team !== TEAM.PLAYER) return;
+        if (producer.beingBuilt || producer.buildProgress < 100) return;
+        if (this.playerCredits < def.cost) {
+            this.addMessage('Not enough credits!', 'warning');
+            this.audio.play('error');
+            return;
+        }
+        this.playerCredits -= def.cost;
+        producer.productionQueue.push(type);
+    }
+
+    sellBuilding(entity) {
+        if (!entity || entity.dead || entity.team !== TEAM.PLAYER || !entity.isBuilding) return;
+        if (entity.type === 'construction_yard') return;
+        const refund = Math.floor(entity.cost * 0.5);
+        this.playerCredits += refund;
+        this.killEntity(entity);
+        this.addMessage(`Sold for $${refund}`, '');
+    }
+
+    addMessage(text, type = '') {
+        this.messages.push({ text, type, time: Date.now() });
+        if (this.messages.length > 5) this.messages.shift();
+    }
+
+    resize() {
+        if (!this.canvas) return;
+        this.canvas.width = window.innerWidth - 256;
+        this.canvas.height = window.innerHeight;
+        if (this.minimapCanvas) {
+            this.minimapCanvas.width = 234;
+            this.minimapCanvas.height = Math.floor(234 * (this.mapH / this.mapW));
+        }
+    }
+
+    handleKeyDown(key) {
+        this.keys[key.code] = true;
+        if (key.ctrlKey && key.code >= 'Digit1' && key.code <= 'Digit9') {
+            const n = parseInt(key.code.replace('Digit', ''));
+            if (this.selectedEntities.length > 0) this.unitGroups[n] = [...this.selectedEntities];
+        }
+        if (!key.ctrlKey && key.code >= 'Digit1' && key.code <= 'Digit9') {
+            const n = parseInt(key.code.replace('Digit', ''));
+            if (this.unitGroups[n]) {
+                for (const e of this.selectedEntities) e.selected = false;
+                this.selectedEntities = this.unitGroups[n].filter(e => !e.dead);
+                for (const e of this.selectedEntities) e.selected = true;
+            }
+        }
+        if (key.code === 'Delete') {
+            for (const e of this.selectedEntities) this.sellBuilding(e);
+        }
+        if (key.code === 'Space' && this.selectedEntities.length > 0) {
+            const sel = this.selectedEntities[0];
+            this.targetCamera.x = sel.x - this.canvas.width / 2;
+            this.targetCamera.y = sel.y - this.canvas.height / 2;
+        }
+        if (key.code === 'Escape') {
+            this.placingBuilding = null;
+            for (const e of this.selectedEntities) e.selected = false;
+            this.selectedEntities = [];
+        }
+    }
+
+    handleKeyUp(key) {
+        this.keys[key.code] = false;
+    }
+}

@@ -44,8 +44,17 @@ function setupMenuListeners() {
         showScreen('how-to-play');
     });
 
-    document.getElementById('btn-back-menu')?.addEventListener('click', () => showScreen('main-menu'));
-    document.getElementById('btn-back-menu2')?.addEventListener('click', () => showScreen('main-menu'));
+    document.getElementById('btn-back-menu')?.addEventListener('click', () => {
+        hideAllOverlays();
+        game.state = 'menu';
+        showScreen('main-menu');
+    });
+
+    document.getElementById('btn-back-menu2')?.addEventListener('click', () => {
+        hideAllOverlays();
+        game.state = 'menu';
+        showScreen('main-menu');
+    });
 
     document.getElementById('btn-start-mission')?.addEventListener('click', () => {
         game.audio.resume();
@@ -142,7 +151,6 @@ function setupGameListeners() {
         const rect = canvas.getBoundingClientRect();
         game.handleMouseMove(e.clientX - rect.left, e.clientY - rect.top);
 
-        // Edge scrolling
         const edge = 30;
         if (e.clientX < rect.left + edge) game.keys['ArrowLeft'] = true;
         else game.keys['ArrowLeft'] = false;
@@ -156,7 +164,6 @@ function setupGameListeners() {
 
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-    // Minimap click
     minimap?.addEventListener('click', (e) => {
         if (game.state !== 'playing') return;
         const rect = minimap.getBoundingClientRect();
@@ -209,6 +216,7 @@ function setupLevelSelect() {
 }
 
 function startLevel(levelIndex) {
+    hideAllOverlays();
     showScreen('mission-briefing');
     const level = LEVELS[levelIndex - 1];
     if (!level) return;
@@ -236,7 +244,8 @@ function startCurrentLevel() {
 }
 
 function showGameOver(victory) {
-    if (game.state === 'gameover') return; // Prevent double call
+    // CRITICAL: Prevent double-call
+    if (game.state === 'gameover') return;
     game.state = 'gameover';
 
     const overlay = document.getElementById('game-over');
@@ -262,12 +271,14 @@ function showGameOver(victory) {
 
 // ===== GAME LOOP =====
 let lastUIUpdate = 0;
-let victoryShown = false;
-let defeatShown = false;
+let victoryTriggered = false;
+let defeatTriggered = false;
 
 function gameLoop(timestamp) {
+    // Update game logic
     game.update(timestamp);
 
+    // Render
     if (game.state === 'playing' || game.state === 'paused' || game.state === 'gameover') {
         renderGame(game);
 
@@ -277,20 +288,24 @@ function gameLoop(timestamp) {
         }
     }
 
-    // Victory/defeat display - single trigger
-    if (game.state === 'playing' && game.victory && !victoryShown) {
-        victoryShown = true;
-        setTimeout(() => showGameOver(true), 1000);
-    }
-    if (game.state === 'playing' && game.defeat && !defeatShown) {
-        defeatShown = true;
-        setTimeout(() => showGameOver(false), 1000);
+    // Single-trigger victory/defeat display with guards
+    if (game.state === 'playing') {
+        if (game.victory && !victoryTriggered) {
+            victoryTriggered = true;
+            console.log('[Main] Victory detected, showing game over in 1s');
+            setTimeout(() => showGameOver(true), 1000);
+        }
+        if (game.defeat && !defeatTriggered) {
+            defeatTriggered = true;
+            console.log('[Main] Defeat detected, showing game over in 1s');
+            setTimeout(() => showGameOver(false), 1000);
+        }
     }
 
-    // Reset flags when not playing
+    // Reset triggers when not in playing state
     if (game.state !== 'playing') {
-        if (!game.victory) victoryShown = false;
-        if (!game.defeat) defeatShown = false;
+        if (!game.victory) victoryTriggered = false;
+        if (!game.defeat) defeatTriggered = false;
     }
 
     requestAnimationFrame(gameLoop);
