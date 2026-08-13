@@ -1,7 +1,8 @@
-import { Game } from './engine.js?v=3';
-import { renderGame, updateUI } from './renderer.js?v=3';
-import { LEVELS } from './levels.js?v=3';
-import { TILE_SIZE } from './utils.js?v=3';
+import { Game } from './engine.js?v=4';
+import { renderGame, updateUI } from './renderer.js?v=4';
+import { LEVELS } from './levels.js?v=4';
+import { TILE_SIZE } from './utils.js?v=4';
+import { Textures } from './shaders.js?v=4';
 
 const game = new Game();
 
@@ -20,6 +21,7 @@ function init() {
     const canvas = document.getElementById('game-canvas');
     const minimap = document.getElementById('minimap-canvas');
     game.init(canvas, minimap);
+    Textures.load();
 
     setupMenuListeners();
     setupGameListeners();
@@ -241,6 +243,16 @@ function startCurrentLevel() {
     game.state = 'playing';
     game.loadLevel(game.currentLevelIndex);
     game.resize();
+    // RA3 shader port: invasion-screen transition on mission start
+    const invasion = document.getElementById('invasion-overlay');
+    if (invasion) {
+        invasion.classList.remove('hidden');
+        invasion.classList.add('invasion-anim');
+        setTimeout(() => {
+            invasion.classList.add('hidden');
+            invasion.classList.remove('invasion-anim');
+        }, 1300);
+    }
 }
 
 function showGameOver(victory) {

@@ -325,6 +325,7 @@ export class Game {
         });
         entity.x = tileX * TILE_SIZE + TILE_SIZE / 2;
         entity.y = tileY * TILE_SIZE + TILE_SIZE / 2;
+        entity.spawnTime = this.gameTime;
         this.entities.push(entity);
         return entity;
     }

@@ -2,6 +2,7 @@ import {
     TILE_SIZE, T, TEAM, BUILDINGS, UNITS, TILE_COLORS, TILE_WALKABLE,
     SIDEBAR_WIDTH, TOP_HUD_HEIGHT
 } from './utils.js';
+import { fresnelRim, pointLight, hologram, starryVFX, drawSkybox, Textures } from './shaders.js?v=4';
 
 const TEAM_COLORS = {
     [TEAM.PLAYER]: { primary: '#2266cc', secondary: '#3388ff', light: '#5599ff', dark: '#1144aa', minimap: '#4488ff' },
@@ -192,6 +193,10 @@ function renderBuildings(ctx, game, startX, startY, endX, endY) {
             ctx.fillStyle = '#fff';
             ctx.fillText(BUILDINGS[entity.type]?.icon || '?', px + w/2, py + h/2);
 
+            // RA3 shader port: Fresnel rim glow + point-light bloom on building
+            fresnelRim(ctx, px + w/2, py + h/2, Math.max(w, h) / 2 * 1.08,
+                entity.team === TEAM.PLAYER ? '#4488ff' : '#ff4444', { intensity: 0.6 });
+
             // Production indicator
             if (entity.productionQueue.length > 0 || entity.productionItem) {
                 ctx.fillStyle = '#ffcc00';
@@ -322,6 +327,15 @@ function renderUnits(ctx, game) {
             ctx.fillText('🚁', 0, -size * 0.5);
         }
 
+        // RA3 shader port: Fresnel rim glow on unit (drawn in translated ctx at 0,0)
+        fresnelRim(ctx, 0, 0, size * 1.45,
+            entity.team === TEAM.PLAYER ? '#4488ff' : '#ff4444', { intensity: 0.9 });
+
+        // RA3 shader port: starry "materialize" VFX on spawn
+        if (game.gameTime - (entity.spawnTime || 0) < 0.8) {
+            starryVFX(ctx, 0, 0, size * 3.2, game.gameTime * 1000, game.gameTime * 2);
+        }
+
         ctx.restore();
 
         // Harvester ore indicator
@@ -391,6 +405,9 @@ function renderProjectiles(ctx, game) {
         ctx.moveTo(proj.x, proj.y);
         ctx.lineTo(proj.x - proj.dx * 3, proj.y - proj.dy * 3);
         ctx.stroke();
+
+        // RA3 shader port: point-light glow on projectile
+        pointLight(ctx, proj.x, proj.y, 22, '#ffcc33', 0.7);
     }
 }
 
@@ -410,6 +427,9 @@ function renderExplosions(ctx, game) {
         ctx.beginPath();
         ctx.arc(exp.x, exp.y, radius, 0, Math.PI * 2);
         ctx.fill();
+
+        // RA3 shader port: point-light burst
+        pointLight(ctx, exp.x, exp.y, radius * 1.6, '#ff7722', alpha * 2.2);
     }
 }
 
